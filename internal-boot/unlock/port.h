@@ -5,10 +5,7 @@
 #include <stddef.h>
 #include "machine-profile.h"
 
-/* Secondary display adapter on the B650M profile (Raphael iGPU). The
-   aggregate-console profile has no second adapter. */
-#define GU_AMD_ID 0x164e1002U
-#define GU_AMD_SUBSYSTEM 0x88771043U
+/* The console adapter (RTX 5070) identity comes from machine-profile.h (GU_OTHER_GPU_*). */
 /* The default artifact is read-only. Legacy host containment tests are never
    a production enable switch; experimental firmware requires its own define. */
 #if defined(GU_HOST_WRITE_TEST) && __STDC_HOSTED__ != 1
@@ -20,22 +17,22 @@
 #if (defined(GU_STOCK_PROFILE_ORIGINAL_03100062) + defined(GU_STOCK_PROFILE_OBSERVED_03000062) + defined(GU_ENTRY_LATCHED_SS1_PRESERVE) + defined(GU_ENTRY_LATCHED_SS1_FULL)) > 1
 #error Select exactly one stock profile
 #endif
-#if defined(GU_EXPERIMENTAL_3090) && defined(GU_STOCK_PROFILE_ORIGINAL_03100062)
+#if defined(GU_EXPERIMENTAL_UNLOCK) && defined(GU_STOCK_PROFILE_ORIGINAL_03100062)
 #define GU_STOCK_PROFILE_SS0 0x03100062U
 #define GU_STOCK_PROFILE_NAME "original03100062"
-#elif defined(GU_EXPERIMENTAL_3090) && defined(GU_STOCK_PROFILE_OBSERVED_03000062)
+#elif defined(GU_EXPERIMENTAL_UNLOCK) && defined(GU_STOCK_PROFILE_OBSERVED_03000062)
 #define GU_STOCK_PROFILE_SS0 0x03000062U
 #define GU_STOCK_PROFILE_NAME "observed03000062"
-#elif defined(GU_EXPERIMENTAL_3090) && defined(GU_ENTRY_LATCHED_SS1_PRESERVE)
+#elif defined(GU_EXPERIMENTAL_UNLOCK) && defined(GU_ENTRY_LATCHED_SS1_PRESERVE)
 #define GU_STOCK_PROFILE_NAME "entryLatchedSs1Preserve"
-#elif defined(GU_EXPERIMENTAL_3090) && defined(GU_ENTRY_LATCHED_SS1_FULL)
+#elif defined(GU_EXPERIMENTAL_UNLOCK) && defined(GU_ENTRY_LATCHED_SS1_FULL)
 #define GU_STOCK_PROFILE_NAME "entryLatchedSs1Full"
-#elif defined(GU_EXPERIMENTAL_3090)
+#elif defined(GU_EXPERIMENTAL_UNLOCK)
 #error Experimental firmware requires exactly one explicit stock profile
 #elif defined(GU_STOCK_PROFILE_ORIGINAL_03100062) || defined(GU_STOCK_PROFILE_OBSERVED_03000062) || defined(GU_ENTRY_LATCHED_SS1_PRESERVE) || defined(GU_ENTRY_LATCHED_SS1_FULL)
 #error Stock profile selection requires experimental firmware
 #endif
-#if defined(GU_EXPERIMENTAL_3090) || (defined(GU_HOST_WRITE_TEST) && __STDC_HOSTED__ == 1)
+#if defined(GU_EXPERIMENTAL_UNLOCK) || (defined(GU_HOST_WRITE_TEST) && __STDC_HOSTED__ == 1)
 #define GU_PREFLIGHT_ONLY 0
 #else
 #define GU_PREFLIGHT_ONLY 1

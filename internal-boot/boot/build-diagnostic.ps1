@@ -1,4 +1,4 @@
-param([string]$Clang='clang',[string]$LldLink='lld-link',[string]$Python='python')
+param([string]$Clang='clang',[string]$LldLink='lld-link',[string]$Python='python',[ValidateSet('z790-3060')][string]$HardwareProfile='z790-3060')
 $ErrorActionPreference='Stop'
 Push-Location -LiteralPath $PSScriptRoot
 try {
@@ -19,7 +19,7 @@ try {
   [ordered]@{Path=$_;Sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash}
  })
  [ordered]@{
-  HardwareTested=$false;Mode='graph-capture-then-normal-windows';CanUnlock=$false
+  HardwareTested=$false;HardwareProfile=$HardwareProfile;Mode='graph-capture-then-normal-windows';CanUnlock=$false
   CanDetach=$false;WritesFirmwareVariables=$false
   EfiSha256=(Get-FileHash -LiteralPath build/diagnostic/DIAGNOSTIC.EFI -Algorithm SHA256).Hash
   BuiltUtc=[DateTime]::UtcNow.ToString('o');Sources=$sourceManifest

@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference='Stop'
 Push-Location -LiteralPath $PSScriptRoot
 try {
- $unlock=Join-Path $PSScriptRoot '../unlock/build/experimental/entryLatchedSs1Full/internal/RTX3090-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI'
+ $unlock=Join-Path $PSScriptRoot '../unlock/build/experimental/entryLatchedSs1Full/internal/RTX3060-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI'
  if(!(Test-Path -LiteralPath $unlock)){throw 'Build the internal unlock profile first'}
  $hash=(Get-FileHash -LiteralPath $unlock -Algorithm SHA256).Hash.ToLowerInvariant()
  $bytes=(Get-Item -LiteralPath $unlock).Length

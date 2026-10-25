@@ -92,10 +92,10 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   status=Table->BootServices->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
   if(EFI_ERROR(status) || !fs)return EFI_UNSUPPORTED;
   status=fs->OpenVolume(fs,&Root);if(EFI_ERROR(status) || !Root)return EFI_DEVICE_ERROR;
-#if defined(GU_EXPERIMENTAL_3090)
-  status=Root->Open(Root,&Parent,L"\\RTX3090-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
+#if defined(GU_EXPERIMENTAL_UNLOCK)
+  status=Root->Open(Root,&Parent,L"\\RTX3060-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
 #else
-  status=Root->Open(Root,&Parent,L"\\RTX3090-PREFLIGHT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
+  status=Root->Open(Root,&Parent,L"\\RTX3060-PREFLIGHT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
 #endif
   if(EFI_ERROR(status) || !Parent)return EFI_NOT_FOUND;
   status=Metadata(Parent,TRUE,0);if(EFI_ERROR(status))return status;
@@ -125,11 +125,11 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
 #ifdef GU_HEADLESS_RESEARCH
     GuLog("HEADLESS RESEARCH: file-only log; zero physical GOP; automatic exact-card unlock; hardware untested.\n");
 #endif
-    GuLog("RTX3090 AUTOMATIC INTERNAL UNLOCK\nAUTO%06u\nEsc cancels; exact hardware gates and one transaction only.\n",(unsigned)slot);
-#elif defined(GU_EXPERIMENTAL_3090)
-    GuLog("RTX3090 AMD EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",(unsigned)slot);
+    GuLog("RTX3060 AUTOMATIC INTERNAL UNLOCK\nAUTO%06u\nEsc cancels; exact hardware gates and one transaction only.\n",(unsigned)slot);
+#elif defined(GU_EXPERIMENTAL_UNLOCK)
+    GuLog("RTX3060 EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",(unsigned)slot);
 #else
-    GuLog("RTX3090 AMD read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",(unsigned)slot);
+    GuLog("RTX3060 read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",(unsigned)slot);
 #endif
     return GuLogReady()?EFI_SUCCESS:EFI_DEVICE_ERROR;
   }

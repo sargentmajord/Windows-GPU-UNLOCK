@@ -28,8 +28,4 @@ internal-boot/local-config.json
 internal-boot/install/state.json
 internal-boot/install/headless-state.json
 internal-boot/install/headless-state.json.pending-*
-research/results/
-research/headless/registration.local.json
-research/headless/r2-registration.local.json
-research/headless/headless-registration.local.json
 internal-boot/deps/

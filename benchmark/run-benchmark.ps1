@@ -2,7 +2,7 @@
 param([switch]$PreflightOnly)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$exe = Join-Path $root 'bin\compute-benchmark-3090.exe'
+$exe = Join-Path $root 'bin\compute-benchmark-3060.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Build the benchmark first' }
 $manifest = Get-Content -LiteralPath (Join-Path $root 'build-manifest.json') -Raw | ConvertFrom-Json
 foreach ($artifact in $manifest) {
@@ -13,10 +13,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Runtime metadata check failed' }
 Write-Output $inspect
 if ($PreflightOnly) { Write-Output 'Preflight only: no GPU workload run'; exit 0 }
 function Assert-GpuIdle {
-    $rows = @(& nvidia-smi --query-gpu=name,pci.bus_id,driver_version,utilization.gpu,memory.used,temperature.gpu --format=csv,noheader,nounits)
-    if ($LASTEXITCODE -ne 0 -or $rows.Count -ne 1) { throw 'Expected exactly one NVIDIA GPU' }
+    $rows = @(& nvidia-smi --query-gpu=name,pci.bus_id,driver_version,utilization.gpu,memory.used,temperature.gpu --format=csv,noheader,nounits | Where-Object { $_ -like "NVIDIA GeForce RTX 3060,*" })
+    if ($LASTEXITCODE -ne 0 -or $rows.Count -lt 1) { throw 'Expected the RTX 3060 to be present' }
     $fields = $rows[0] -split ',' | ForEach-Object { $_.Trim() }
-    if ($fields[0] -ne 'NVIDIA GeForce RTX 3090' -or $fields[1] -notmatch '^0+:01:00\.0$') { throw 'Unexpected GPU identity' }
+    if ($fields[0] -ne 'NVIDIA GeForce RTX 3060' -or $fields[1] -notmatch '^0+:01:00\.0$') { throw 'Unexpected GPU identity' }
     if ([int]$fields[3] -gt 5 -or [int]$fields[4] -gt 2048) { throw 'GPU is busy. Save and finish ComfyUI/other GPU jobs before benchmarking. Nothing was stopped.' }
     if ([int]$fields[5] -gt 65) { throw 'GPU is still hot. Let it cool before a comparable measurement.' }
     return $rows[0]
@@ -32,7 +32,7 @@ for ($trial = 1; $trial -le 3; $trial++) {
     $json = & $exe 2> (Join-Path $resultRoot "trial-$trial.stderr.txt")
     if ($LASTEXITCODE -ne 0) { throw "Benchmark failed in trial $trial; keep partial evidence in $resultRoot" }
     $parsed = $json | ConvertFrom-Json
-    if ($parsed.gpu -ne 'NVIDIA GeForce RTX 3090' -or $parsed.cuda_runtime -ne 12060 -or $parsed.cublas -ne 120600 -or $parsed.benchmarks.Count -ne 3) { throw 'Unexpected benchmark metadata' }
+    if ($parsed.gpu -ne 'NVIDIA GeForce RTX 3060' -or $parsed.cuda_runtime -ne 12060 -or $parsed.cublas -ne 120600 -or $parsed.benchmarks.Count -ne 3) { throw 'Unexpected benchmark metadata' }
     $json | Set-Content -LiteralPath (Join-Path $resultRoot "trial-$trial.json") -Encoding utf8
     $measurements += $parsed
     & nvidia-smi --query-gpu=timestamp,driver_version,clocks.sm,power.draw,temperature.gpu,clocks_event_reasons.sw_thermal_slowdown --format=csv |

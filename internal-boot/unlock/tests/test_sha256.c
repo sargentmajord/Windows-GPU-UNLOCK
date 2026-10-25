@@ -227,7 +227,7 @@ int main(int Argc, char **Argv)
     if (Argc == 3) TestPinnedFile(Argv[1],
         "572373620a37418f24dc16b5031c39338778c3257e48e8408de9a57291b24f3a");
     TestPinnedFile(Argv[Argc - 1],
-        "8ea297373e9e5d3600ff41ad9fae88f2d14c98c017d100669f7333981da673b4");
+        "5630f3a825e52a225fcead26663288fa6c2017ad46dde6335388a01e7f03a38d");
     printf("SHA-256: %u checks, %u failures\n", Checks, Failures);
     return Failures != 0;
 }

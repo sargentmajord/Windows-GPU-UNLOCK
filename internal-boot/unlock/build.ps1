@@ -8,14 +8,13 @@ param(
  [switch]$AutomaticBoot,
  [switch]$HeadlessResearch,
  [ValidateSet('original03100062','observed03000062','entryLatchedSs1Preserve','entryLatchedSs1Full')][string]$StockProfile,
- [ValidateSet('b650m-3090fe','b660m-3070ti')][string]$HardwareProfile='b650m-3090fe'
+ [ValidateSet('z790-3060')][string]$HardwareProfile='z790-3060'
 )
 # Reviewed single-machine profiles; mirrors internal-boot/unlock/machine-profile.h.
 # A profile is fixed provenance: it selects constants compiled into the EFI,
 # never a user-editable switch.
 $hwTable=@{
- 'b650m-3090fe'=[ordered]@{Define='-DGU_PROFILE_B650M_3090FE';Name='ASUS-TUF-B650M-PLUS-WIFI-3057-RTX3090-FE';TargetPci='220410de';Subsystem='145410de';Chip='0xb72000a1';Prom='8ea297373e9e5d3600ff41ad9fae88f2d14c98c017d100669f7333981da673b4';Memory='0x6000';HeadlessOnly=$false}
- 'b660m-3070ti'=[ordered]@{Define='-DGU_PROFILE_B660M_3070TI';Name='ASUS-TUF-GAMING-B660M-E-D4-4003-RTX3070TI';TargetPci='248210de';Subsystem='50521462';Chip='0xb74000a1';Prom='f429aa1d5f0f18d11ed9a19503683a674fe3541ae77e959df8e732652c2b4df0';Memory='0x2000';HeadlessOnly=$true}
+ 'z790-3060'=[ordered]@{Define='-DGU_PROFILE_Z790_3060';Name='MSI-MEG-Z790-GODLIKE-1.I0-RTX3060';TargetPci='254410de';Subsystem='397d1462';Chip='0xb76000a1';Prom='5630f3a825e52a225fcead26663288fa6c2017ad46dde6335388a01e7f03a38d';Memory='0x3000';HeadlessOnly=$false}
 }
 $hw=$hwTable[$HardwareProfile]
 $ErrorActionPreference='Stop'
@@ -25,7 +24,7 @@ try {
  if($ExperimentalUnlock -and !$PSBoundParameters.ContainsKey('StockProfile')){throw '-StockProfile is required with -ExperimentalUnlock'}
  if(!$ExperimentalUnlock -and $PSBoundParameters.ContainsKey('StockProfile')){throw '-StockProfile is only valid with -ExperimentalUnlock'}
  $out=if($ExperimentalUnlock){"build/experimental/$StockProfile"}else{'build'}
- $name=if($ExperimentalUnlock){"RTX3090-EXPERIMENTAL-$StockProfile"}else{'RTX3090-PREFLIGHT'}
+ $name=if($ExperimentalUnlock){"RTX3060-EXPERIMENTAL-$StockProfile"}else{'RTX3060-PREFLIGHT'}
  $defines=@()
  if($HeadlessResearch -and (!$AutomaticBoot -or !$InternalBoot -or !$ExperimentalUnlock -or $StockProfile -ne 'entryLatchedSs1Full')){throw 'Headless research requires automatic internal exact full profile'}
  if($hw.HeadlessOnly -and $ExperimentalUnlock -and !$HeadlessResearch){throw ('Profile '+$HardwareProfile+' only ships a headless write path; non-headless builds are diagnostic-only')}
@@ -36,7 +35,7 @@ try {
  }
  if($AutomaticBoot){$out+='/automatic';$name+='-AUTO';$defines+='-DGU_AUTOMATIC_BOOT'}
  if($HeadlessResearch){$out+='/headless-research';$name+='-HEADLESS-RESEARCH';$defines+='-DGU_HEADLESS_RESEARCH'}
-  if($ExperimentalUnlock){$defines+= '-DGU_EXPERIMENTAL_3090';$defines+=$(switch($StockProfile){'original03100062'{'-DGU_STOCK_PROFILE_ORIGINAL_03100062'} 'observed03000062'{'-DGU_STOCK_PROFILE_OBSERVED_03000062'} 'entryLatchedSs1Preserve'{'-DGU_ENTRY_LATCHED_SS1_PRESERVE'} 'entryLatchedSs1Full'{'-DGU_ENTRY_LATCHED_SS1_FULL'}})}
+  if($ExperimentalUnlock){$defines+= '-DGU_EXPERIMENTAL_UNLOCK';$defines+=$(switch($StockProfile){'original03100062'{'-DGU_STOCK_PROFILE_ORIGINAL_03100062'} 'observed03000062'{'-DGU_STOCK_PROFILE_OBSERVED_03000062'} 'entryLatchedSs1Preserve'{'-DGU_ENTRY_LATCHED_SS1_PRESERVE'} 'entryLatchedSs1Full'{'-DGU_ENTRY_LATCHED_SS1_FULL'}})}
  New-Item -ItemType Directory -Path $out -Force | Out-Null
  $sources=@('app','app_io','ownership','format','runtime','sha256','checks','port','compat',
   'vendor/unlock_610','vendor/prep_610','vendor/layout_610','vendor/vbios_610','vendor/gfw_eval')
@@ -55,7 +54,7 @@ try {
   CanArm=[bool]$ExperimentalUnlock;Defines=$defines;ManualConfirmation=$(if($AutomaticBoot){'none; Esc within 3 seconds cancels'}else{'U once; Esc or 30-second timeout cancels'});
   StockProfile=$(if($ExperimentalUnlock){$StockProfile}else{$null});ColdChipExpected=$hw.Chip;ColdSS0Expected=$(if($StockProfile -like 'entryLatchedSs1*'){'first fully validated cold entry; immutable'}elseif($ExperimentalUnlock){if($StockProfile -eq 'original03100062'){'0x03100062'}else{'0x03000062'}}else{'unknown'});ColdSS1Expected=$(if($StockProfile -like 'entryLatchedSs1*'){'first fully validated cold entry <= 0xf; immutable'}else{'0x6'});
   SS0Target='0x88888888';SS1Target=$(if($StockProfile -eq 'entryLatchedSs1Preserve'){'preserve entry; no SS1 writes'}elseif($StockProfile -eq 'entryLatchedSs1Full'){'0x8; one guarded write'}elseif($ExperimentalUnlock){'0x8'}else{'no writes'});
-  OriginalBaselineCapture='G:/RTX3090-PREFLIGHT/RUN00/REPORT.TXT';
+  OriginalBaselineCapture='local read-only diagnostic capture of the target machine (not published)';
   StockProfileSource=$(if($StockProfile -like 'entryLatchedSs1*'){'Explicit immutable validated entry latch; no fixed stock selector assumption'}elseif($StockProfile -eq 'observed03000062'){'Explicit observed03000062 experiment selection; original baseline capture does not evidence this SS0'}elseif($ExperimentalUnlock){'OriginalBaselineCapture'}else{'preflight has no selected stock profile'});
   PromSha256=$hw.Prom;
   DeviceMemorySize=$hw.Memory;HardwareTested=$false;

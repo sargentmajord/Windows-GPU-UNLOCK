@@ -51,9 +51,9 @@ if([int]$enc.VolumeStatus -ne 0 -or [int]$enc.ProtectionStatus -ne 0){throw 'Thi
 $manual=Get-Content (Join-Path $PSScriptRoot 'boot/build/full/manifest.json') -Raw | ConvertFrom-Json
 $auto=Get-Content (Join-Path $PSScriptRoot 'boot/build/automatic/manifest.json') -Raw | ConvertFrom-Json
 $artifacts=@(
- @('unlock/build/experimental/entryLatchedSs1Full/internal/RTX3090-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI','EFI\WindowsGPUUnlock\UNLOCK.EFI',$manual.UnlockSha256),
+ @('unlock/build/experimental/entryLatchedSs1Full/internal/RTX3060-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI','EFI\WindowsGPUUnlock\UNLOCK.EFI',$manual.UnlockSha256),
  @('boot/build/full/FULL.EFI','EFI\WindowsGPUUnlock\MANUAL.EFI',$manual.EfiSha256),
- @('unlock/build/experimental/entryLatchedSs1Full/internal/automatic/RTX3090-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL-AUTO.EFI','EFI\WindowsGPUUnlock\UNLOCK-AUTO.EFI',$auto.ChildSha256),
+ @('unlock/build/experimental/entryLatchedSs1Full/internal/automatic/RTX3060-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL-AUTO.EFI','EFI\WindowsGPUUnlock\UNLOCK-AUTO.EFI',$auto.ChildSha256),
  @('boot/build/automatic/AUTO.EFI','EFI\WindowsGPUUnlock\AUTO.EFI',$auto.EfiSha256)
 )
 if($manual.Mode -ne 'guarded-gop-release-decode-restore-original-unlock' -or $auto.Mode -ne 'guarded-automatic-internal-unlock-then-windows'){throw 'Unexpected build modes'}
@@ -68,12 +68,12 @@ if(!$Assets){throw 'Specify the local directory containing the five required ass
 foreach($a in $artifacts){StageFile (Join-Path $PSScriptRoot $a[0]) $a[1] $a[2]}
 foreach($a in (Get-Content (Join-Path $PSScriptRoot 'unlock/assets.json') -Raw | ConvertFrom-Json)){
  $source=Join-Path $Assets $a.Name;if((Get-Item -LiteralPath $source).Length -ne $a.Bytes){throw 'Wrong asset size'}
- StageFile $source ('RTX3090-UNLOCK\ASSETS\'+$a.Name) $a.Sha256
+ StageFile $source ('RTX3060-UNLOCK\ASSETS\'+$a.Name) $a.Sha256
 }
 function CheckStaged {
  if((Target) -ne $root){throw 'Target changed'}
  foreach($a in $artifacts){if((Get-FileHash -LiteralPath (Join-Path $root $a[1])).Hash -ne $a[2]){throw 'Installed EFI changed'}}
- foreach($a in (Get-Content (Join-Path $PSScriptRoot 'unlock/assets.json') -Raw | ConvertFrom-Json)){if((Get-FileHash -LiteralPath (Join-Path $root ('RTX3090-UNLOCK\ASSETS\'+$a.Name))).Hash -ne $a.Sha256){throw 'Installed asset changed'}}
+ foreach($a in (Get-Content (Join-Path $PSScriptRoot 'unlock/assets.json') -Raw | ConvertFrom-Json)){if((Get-FileHash -LiteralPath (Join-Path $root ('RTX3060-UNLOCK\ASSETS\'+$a.Name))).Hash -ne $a.Sha256){throw 'Installed asset changed'}}
 }
 if(!$RegisterManual -and !$EnableAutomaticBoot){Write-Output 'Files staged only. Boot order unchanged.';return}
 $fw=Bcd @('/enum','{fwbootmgr}');$order=Order $fw;$manager=Bcd @('/enum','{bootmgr}')

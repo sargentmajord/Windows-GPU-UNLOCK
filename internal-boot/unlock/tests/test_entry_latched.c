@@ -4,7 +4,7 @@
 #define GU_STOCK_PROFILE_SS0 0x03100062U
 #endif
 #endif
-#include "test_3090_experimental.c"
+#include "test_experimental.c"
 #undef main
 #ifndef GU_ENTRY_LATCHED
 #error Explicit entry-latched profile required

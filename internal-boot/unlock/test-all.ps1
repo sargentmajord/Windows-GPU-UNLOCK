@@ -1,9 +1,9 @@
 # Modified 2026-10-19/20 for Windows GPU UNLOCK; changes documented in CHANGES.md.
 param(
  [switch]$WithLocalFixtures,
- [string]$Capture='G:/RTX3090-PROBE/RUN00/REPORT.TXT',
- [string]$Prom='G:/RTX3090-PROBE/RUN00/PROM.BIN',
- [string]$ColdCapture='G:/RTX3090-PREFLIGHT/RUN00/REPORT.TXT',
+ [Parameter(Mandatory)][string]$Capture,
+ [Parameter(Mandatory)][string]$Prom,
+ [Parameter(Mandatory)][string]$ColdCapture,
  [string]$Assets=(Join-Path $PSScriptRoot '../analysis/pinned-assets'),
  [string]$Clang='clang',
  [string]$VcVars='C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat',
@@ -31,7 +31,7 @@ try {
  foreach($line in $environment){if($line -match '^([^=]+)=(.*)$'){[Environment]::SetEnvironmentVariable($matches[1],$matches[2],'Process')}}
  $flags=@('-std=c11','-O1','-Wall','-Wextra','-Werror','-Wno-unused-parameter','-Wno-unused-function','-D_CRT_SECURE_NO_WARNINGS','-Icompat','-I../../deps/edk2/MdePkg/Include','-I../../deps/edk2/MdePkg/Include/X64')
  $core=@('port.c','compat.c','vendor/unlock_610.c','vendor/prep_610.c','vendor/layout_610.c','vendor/vbios_610.c','vendor/gfw_eval.c')
- $defs=@('-D__KERNEL__','-DGU_UEFI_PORT','-DGU_TARGET_PCI_ID=0x220410deU')
+ $defs=@('-D__KERNEL__','-DGU_UEFI_PORT','-DGU_TARGET_PCI_ID=0x254410deU')
  if($InternalBoot) {
   if(!$ExperimentalUnlock -or $StockProfile -ne 'entryLatchedSs1Full'){throw 'Internal tests require the full profile'}
   $defs+='-DGU_INTERNAL_BOOT'
@@ -41,17 +41,18 @@ try {
  $jobs=@(
   @{Name='checks';Sources=@('tests/test_checks.c','checks.c');Defines=@();Args=@($Capture)},
   @{Name='port';Sources=@('tests/test_port.c','port.c');Defines=@('-DGU_HOST_WRITE_TEST');Args=@()},
-  @{Name='preflight';Sources=@('tests/test_3090_preflight.c','app.c','app_io.c','ownership.c','format.c','sha256.c','checks.c')+$core;Defines=$defs;Args=@($Prom,$Capture)},
+  @{Name='preflight';Sources=@('tests/test_preflight.c','app.c','app_io.c','ownership.c','format.c','sha256.c','checks.c')+$core;Defines=$defs;Args=@($Prom,$Capture)},
   @{Name='write-lock';Sources=@('tests/test_preflight_lock.c','port.c');Defines=@();Args=@()},
   @{Name='master-attributes';Sources=@('tests/test_master_attributes.c')+$core;Defines=$defs+@('-DGU_HOST_WRITE_TEST');Args=@()},
   @{Name='runtime';Sources=@('tests/test_runtime.c','format.c',"$out/runtime-host.obj");Defines=@('-fno-builtin');Args=@()}
  )
  foreach($profile in $profiles) {
-  $profileDefs=@('-DGU_EXPERIMENTAL_3090',(ProfileDefine $profile))
+  $profileDefs=@('-DGU_EXPERIMENTAL_UNLOCK',(ProfileDefine $profile))
   $jobs+=@{Name="profile-lock-$profile";Sources=@('tests/test_profile_lock.c','port.c');Defines=$profileDefs;Args=@()}
  }
   if($WithLocalFixtures) {
    $jobs+=@{Name='sha';Sources=@('tests/test_sha256.c','sha256.c');Defines=@();Args=@($Prom)}
+ $jobs+=@{Name='gfw';Sources=@('tests/test_gfw_eval.c','vendor/gfw_eval.c');Defines=@();Args=@()}
    $experimentalArgs=@($Prom,$ColdCapture)
    $haveAssets=Test-Path -LiteralPath (Join-Path $Assets 'gsp_boot_desc_ga102.bin')
    if($haveAssets) {
@@ -63,9 +64,9 @@ try {
     $experimentalArgs+=$Assets
    }
    foreach($profile in $profiles) {
-    $profileDefs=$defs+@('-DGU_EXPERIMENTAL_3090',(ProfileDefine $profile))
+    $profileDefs=$defs+@('-DGU_EXPERIMENTAL_UNLOCK',(ProfileDefine $profile))
     if($haveAssets){$jobs+=@{Name="core24GB-$profile";Sources=@('tests/test_efi_transaction.c')+$core;Defines=$profileDefs;Args=@($Prom,$Assets,$ColdCapture)}}
-    $appTest=if($profile -like 'entryLatchedSs1*'){'tests/test_entry_latched.c'}else{'tests/test_3090_experimental.c'}
+    $appTest=if($profile -like 'entryLatchedSs1*'){'tests/test_entry_latched.c'}else{'tests/test_experimental.c'}
     $jobs+=@{Name="experimental-$profile";Sources=@($appTest,'app_io.c','ownership.c','format.c','sha256.c','checks.c')+$core;Defines=$profileDefs;Args=$experimentalArgs}
    }
  }
@@ -80,7 +81,7 @@ try {
   $code=$LASTEXITCODE;$results+=[ordered]@{Name=$job.Name;ExitCode=$code}
   if($code -ne 0){throw "Test failed: $($job.Name)"}
  }
- $peBase=if($InternalBoot){"build/experimental/$StockProfile/internal/RTX3090-EXPERIMENTAL-$StockProfile-INTERNAL"}elseif($ExperimentalUnlock){"build/experimental/$StockProfile/RTX3090-EXPERIMENTAL-$StockProfile"}else{'build/RTX3090-PREFLIGHT'}
+ $peBase=if($InternalBoot){"build/experimental/$StockProfile/internal/RTX3060-EXPERIMENTAL-$StockProfile-INTERNAL"}elseif($ExperimentalUnlock){"build/experimental/$StockProfile/RTX3060-EXPERIMENTAL-$StockProfile"}else{'build/RTX3060-PREFLIGHT'}
  & python tests/test_pe.py "$peBase.EFI" "$peBase.map"
  if($LASTEXITCODE -ne 0){throw 'PE tests failed'}
   $stockComplete=([bool]$WithLocalFixtures -and [bool]$haveAssets)

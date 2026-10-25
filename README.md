@@ -1,145 +1,57 @@
-# Windows GPU UNLOCK
+# Windows GPU UNLOCK - RTX 3060 fork (work in progress)
 
-**English** | [한국어](README.ko.md)
+An experimental, **unreleased** fork of [impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK), the Windows UEFI
+port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a short program before Windows starts that sets the tensor-math
+speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork converts the project to one documented
+machine and works toward a single guided installer for other PCs.
 
-Experimental UEFI unlock and direct Windows handoff for one documented **RTX 3090
-Founders Edition / ASUS BIOS 3057** system. **v0.3.1 is a source-only pre-release**:
-build the internal EFI for your own partition GUIDs. Firmware assets and private,
-partition-specific EFI binaries are not bundled with this release.
+**Status: nothing here is a release, and no installer is published yet.** Everything below describes one machine.
 
-On October 24, 2026, the system completed an internal **headless unlock** with all
-monitors on the RTX: one active RTX GOP before release, zero physical GOPs afterward,
-one automatic unlock transaction, and Windows display recovery. Subsequent Windows
-measurements reached **FP16 124.97 / BF16 128.93 TFLOPS** (three-run medians).
-[Evidence and limitations](evidence/headless-handoff/README.md).
+## What has been verified (one machine, 2026-10-25)
 
-v0.3.1 fixes preflight rejection when firmware exposes more than two RTX display
-children. The rebuilt wrapper completed automatic unlock and Windows handoff on
-the same system; no new performance benchmark was run for this build.
+Reference machine: MSI MEG Z790 GODLIKE (BIOS 1.I0), Core i9-14900KF (no integrated GPU), RTX 3060 12 GB as the target, RTX 5070 keeping the
+screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md).
 
-This is one machine and boot, not general RTX 3090 support. The Ryzen 7 7800X3D
-**has an iGPU**; the experiment used no active AMD GOP. CPUs without an iGPU,
-Intel hosts, other cards and other BIOS versions remain unverified.
-Read [compatibility](docs/COMPATIBILITY.en.md) first.
+- The read-only diagnostic, a console-detach test, a release-only test and the manual unlock (twice, on separate boots) all completed and
+  returned to Windows.
+- Matrix-multiply benchmark (4096x4096, median of three, driver 617.42): FP16 tensor 26.51 -> 48.13 TFLOPS (+81.6%), BF16 tensor
+  26.40 -> 50.34 TFLOPS (+90.7%), FP32 unchanged (8.20 -> 8.18). A five-minute sustained run stayed within about 3% of those values.
+- **Not verified:** other cards, boards, firmware versions or operating systems; sleep and normal Windows restart; the automatic (no keypress) mode beyond one boot; the guided installer (still a plan: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
+- Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation). Games, FP32 work and memory-bound work do not.
 
-## Choose the correct boot path
+## Read this before trying anything
 
-| Path | Display and input | Instructions |
-|---|---|---|
-| **Internal headless** | Monitors on RTX; display temporarily removed; no T/U/Enter | [Headless guide](docs/HEADLESS.en.md): one actual unlock + Windows handoff verified |
-| Internal AMD-display manual / Auto | Motherboard/iGPU display preserved; manual variant requires U | [Existing internal guide](docs/INTERNAL-BOOT.en.md) |
-| Legacy USB manual | AMD/iGPU display; U once, then Boot Override to Windows without reset | [USB guide](docs/GUIDE.en.md) |
+- **No warranty.** This writes to GPU registers before Windows starts. It is unofficial, unsupported by NVIDIA and may void a warranty.
+  Use a card you can afford to lose, and keep a Windows-first boot recovery path. Nothing here flashes the video BIOS; the unlock is lost at every
+  power-off and applied again each boot.
+- **Requirements:** Windows 11 x64 in UEFI mode, Secure Boot **off**, BitLocker off, Windows Fast Startup off (for automatic mode), a second
+  graphics adapter that keeps the screen working, and a display attached to the target card. Games with anti-cheat that requires Secure Boot
+  will not run with it off. See [docs/CHECKS.md](docs/CHECKS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+- **Not included:** NVIDIA firmware, video BIOS images and drivers are never redistributed. Firmware files are generated locally
+  ([docs/ASSETS.en.md](docs/ASSETS.en.md)).
 
-**Headless USB boot has not been tested.** The legacy USB EFI still requires its AMD
-display profile. BIOS priority `USB → Windows` alone does not implement direct handoff.
-
-## Internal headless quick start
-
-Read the [full guide and recovery procedure](docs/HEADLESS.en.md) before changing
-boot settings. Use the exact supported hardware, Secure Boot disabled, a fully
-decrypted Windows C: with BitLocker protection off, and a connected keyboard.
-The tools do not disable encryption.
-
-Preserve the **existing Windows ESP and recovery partition**. Prepare a separate
-GPT FAT32 **EFI System Partition of at least 1 GiB**, with a letter such as U:.
-Tools do not create, shrink, delete or format partitions. An ordinary FAT32 data
-partition alone is not the required ESP.
-
-You need Python 3.9+, clang/lld-link **20.1.8**, the pinned repository dependencies
-and five locally obtained [firmware assets](docs/ASSETS.en.md).
-Host integration tests additionally need MSVC/Windows SDK and private fixtures.
-
-From an administrator PowerShell in the repository root:
-
-```powershell
-# Replace the GUID and tool paths with your own values.
-.\internal-boot\Configure.ps1 -UnlockDriveLetter U `
-  -WindowsEspGuid 'YOUR-WINDOWS-ESP-GUID'
-.\research\headless\build-unlock.ps1 `
-  -Clang 'C:\TOOLS\LLVM20\bin\clang.exe' `
-  -LldLink 'C:\TOOLS\LLVM20\bin\lld-link.exe'
-
-# Stage and append a separate F8 test entry; retain existing boot priority.
-.\internal-boot\Headless.ps1 -Assets '.\assets' -Register
-```
-
-Without an action switch, `Headless.ps1 -Assets '.\assets'` only stages files.
-Configuration and build do not register a boot entry.
-
-1. Save work and fully power off. On the tested ASUS firmware, select
-   **F8 → GPU Headless UNLOCK - EXPERIMENTAL**.
-2. **Wait without T, U or Enter.** Initial Esc within five seconds skips release
-   and unlock and boots Windows directly.
-3. The screen becomes black while the RTX GOP is removed. The child attempts
-   once and the wrapper starts Windows directly. Do not reset between unlock and
-   Windows. Confirm display recovery and [measure](docs/BENCHMARK.en.md).
-4. Only after that F8 test succeeds, enable default automatic boot:
-
-   ```powershell
-   .\internal-boot\Headless.ps1 -EnableAutomatic -ConfirmedSuccess
-   ```
-
-That explicit action places headless first and Windows Boot Manager second and
-disables Windows Fast Startup. Test registration alone does not. Publishing this
-release does not change the research PC's current default boot selection.
-
-**The two Esc windows differ:** initial wrapper Esc boots Windows without release;
-the later three-second child Esc window is after release and cancels into a stop.
-It does not restore the display or continue to Windows. On failure or if Windows
-does not return, fully power off and choose **F8 → Windows Boot Manager**.
-
-```powershell
-.\internal-boot\Headless.ps1 -RestoreWindowsFirst
-```
-
-Windows-first recovery is independent of experimental EFI/build artifacts and
-still works without saved state. Restoring the prior Fast Startup setting needs
-that state; retain it and backups. [Recovery details](docs/HEADLESS.en.md#recovery).
-
-## Results and limits
-
-The successful child reported SS0 `0x88888888`, SS1 `0x8`, BME disabled, zero
-remaining mappings, completed cleanup and one FLR. The wrapper verified the released
-topology before Windows entry. Windows display recovery was observed by the operator.
-
-| CUDA 12.6 / cuBLAS 12.6, 4096 × 4096 | Three-run median |
-|---|---:|
-| FP32 pedantic | 22.85 TFLOPS |
-| FP16 Tensor / FP32 accumulation | 124.97 TFLOPS |
-| BF16 Tensor / FP32 accumulation | 128.93 TFLOPS |
-
-There is **no contemporary controlled locked baseline** for this headless boot,
-so these values do not establish an unlock percentage. They do not establish game
-or ComfyUI gains, long-term stability, sleep/hibernate resume or repeated automatic
-cold-boot reliability. [Sanitized measurements](evidence/headless-handoff/summary.json)
-and [earlier results](docs/RESULTS.en.md) describe separate experiments.
-
-## Implementation and boundaries
-
-Headless is a separate compile-time profile. Exact GPU/PROM/PCI state, firmware
-driver code, ownership, cold state, immutable selectors and cleanup checks remain.
-The child logs to files only and rejects physical GOP reappearance or changed
-console/input interfaces. Ordinary builds retain their AMD display guards.
-Do not remove checks or substitute a PROM hash to force another machine through.
+## Where things are
 
 | Path | Purpose |
 |---|---|
-| `internal-boot/`, `research/headless/` | Internal/headless source, local build, installation and host tests |
-| `unlock/`, `release/` | Preserved legacy USB manual implementation and historical artifacts |
-| `benchmark/`, `evidence/` | Measurement tools and selected public evidence |
-| `docs/` | Compatibility, assets, boot guides and limitations |
+| [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md) | the reference machine and its measured results |
+| [docs/CHECKS.md](docs/CHECKS.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | pre-flight checks and fixes |
+| [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md) | requirements for the planned one-command installer |
+| [docs/AUDIT-2026-10-25.md](docs/AUDIT-2026-10-25.md) | what was checked before the first hardware step |
+| `internal-boot/` | the boot programs, build and staging scripts, host tests |
+| `patches/` | optional patches, including one that removes the automatic mode's Esc cancel windows (with disclaimer) |
+| `benchmark/` | the before/after benchmark |
 
-No VBIOS flashing or Windows driver replacement is part of the procedure.
-Driver 617.14 was unchanged in the documented run. Host mock tests do not add hardware
-support. New systems require [compatibility reporting](docs/CONTRIBUTING.en.md) and
-[portability validation](docs/PORTABILITY.en.md).
+## Changes in this fork
+
+Fixed the RTX 3060 `10de:2544` firmware-load alignment bug (upstream [pull request #115](https://github.com/Zagitta/gpu-unlock/pull/115), applied
+here with regression tests), made the release path work on firmware without an EDID driver, replaced the author's machine profiles with one
+for the reference machine, and added tests, documentation and a benchmark for it. Full list: [CHANGES.md](CHANGES.md).
 
 ## License and attribution
 
-The port and reused core are **GPL-2.0-only**; EDK2 and separately attributed
-components retain their licenses. Based on
+GPL-2.0-only; EDK2 and separately attributed components keep their licenses. Based on
 [rough2515-hub/rtx3080-unlock-public](https://github.com/rough2515-hub/rtx3080-unlock-public/tree/a08254d269af30ace9e57237abd3d8e6c261e8f5)
-and [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956).
-Preserve [LICENSE](LICENSE), [third-party notices](THIRD_PARTY_NOTICES.md) and
-[change history](CHANGES.md). NVIDIA firmware, PROM/BIOS images, drivers and CUDA
-DLLs are not redistributed in this source release.
+and [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956), through impacifist's port.
+The original author's own documents and measurements for his machines are in the [upstream repository](https://github.com/impacifist/Windows-GPU-UNLOCK) and are not repeated here. Keep [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [CHANGES.md](CHANGES.md). Changes in this fork were made by Sargentmajord with
+assistance from Claude, an AI coding assistant. Not affiliated with or endorsed by NVIDIA.

@@ -1,8 +1,7 @@
 # Help investigate compatibility
 
-**English** | [한국어](CONTRIBUTING.ko.md)
 
-Reports from other motherboard, CPU and GPU configurations help prioritize ports. **Submitting a report does not require booting the EFI, changing BIOS settings or running the unlock.** The current EFI is still restricted to the [published machine](COMPATIBILITY.en.md).
+Reports from other motherboard, CPU and GPU configurations help prioritize ports. **Submitting a report does not require booting the EFI, changing BIOS settings or running the unlock.** The current EFI is still restricted to the [reference machine](PROFILE-Z790-3060.en.md).
 
 ## Collect an inventory on Windows
 

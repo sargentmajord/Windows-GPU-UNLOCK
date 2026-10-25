@@ -15,7 +15,7 @@ static BOOLEAN GuAppError(EFI_STATUS s){return s!=EFI_SUCCESS;}
 #undef EFI_ERROR
 #define EFI_ERROR(Status) GuAppError(Status)
 #endif
-#if defined(GU_AUTOMATIC_BOOT) && (!defined(GU_EXPERIMENTAL_3090) || !defined(GU_INTERNAL_BOOT) || !defined(GU_ENTRY_LATCHED_SS1_FULL))
+#if defined(GU_AUTOMATIC_BOOT) && (!defined(GU_EXPERIMENTAL_UNLOCK) || !defined(GU_INTERNAL_BOOT) || !defined(GU_ENTRY_LATCHED_SS1_FULL))
 #error Automatic boot requires experimental internal entryLatchedSs1Full
 #endif
 #ifdef GU_HEADLESS_RESEARCH
@@ -71,7 +71,7 @@ static BOOLEAN ConsoleGopCheck(EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop,UINTN Index,
   }
   return valid;
 }
-static BOOLEAN AmdGopParent(EFI_DEVICE_PATH_PROTOCOL *Path) {
+static BOOLEAN OtherGopParent(EFI_DEVICE_PATH_PROTOCOL *Path) {
   EFI_DEVICE_PATH_PROTOCOL *remaining=Path;EFI_HANDLE parent=NULL;
   EFI_PCI_IO_PROTOCOL *pci=NULL;UINT32 id=0,subsystem=0;UINTN s,b,d,f;
   if(!Gu.bs->LocateDevicePath)return FALSE;
@@ -80,11 +80,11 @@ static BOOLEAN AmdGopParent(EFI_DEVICE_PATH_PROTOCOL *Path) {
   status=Gu.bs->HandleProtocol(parent,&PciGuid,(VOID **)&pci);
   if(EFI_ERROR(status) || !pci || !pci->GetLocation || !pci->Pci.Read)return FALSE;
   status=pci->GetLocation(pci,&s,&b,&d,&f);
-  if(EFI_ERROR(status) || s || b!=12 || d || f)return FALSE;
+  if(EFI_ERROR(status) || s || b!=GU_OTHER_GPU_BUS || d || f)return FALSE;
   status=pci->Pci.Read(pci,EfiPciIoWidthUint32,0,1,&id);
   if(!EFI_ERROR(status))status=pci->Pci.Read(pci,EfiPciIoWidthUint32,0x2c,1,&subsystem);
-  GuLog("AMD GOP PCI parent: status=%#llx id=%#x subsystem=%#x\n",(unsigned long long)status,id,subsystem);
-  return !EFI_ERROR(status) && id==GU_AMD_ID && subsystem==GU_AMD_SUBSYSTEM;
+  GuLog("Console adapter GOP PCI parent: status=%#llx id=%#x subsystem=%#x\n",(unsigned long long)status,id,subsystem);
+  return !EFI_ERROR(status) && id==GU_OTHER_GPU_ID && subsystem==GU_OTHER_GPU_SUBSYSTEM;
 }
 #endif
 static BOOLEAN DisplayCheck(VOID) {
@@ -116,7 +116,7 @@ static BOOLEAN DisplayCheck(VOID) {
         if(info.PixelFormat==PixelBltOnly)continue;
         /* EDK2 ConSplitter forwards QueryMode to its sole physical GOP. Accept
            that RGB/BGR result only on the system console, then match it against
-            the one validated AMD GOP after enumeration (handle order varies). */
+            the one validated console adapter GOP after enumeration (handle order varies). */
         if(handles[i]==Table->ConsoleOutHandle && !forwarding) {
           forwarded=info;forwarding=TRUE;continue;
         }
@@ -125,7 +125,7 @@ static BOOLEAN DisplayCheck(VOID) {
     }
     if(!mode->Info || mode->SizeOfInfo<sizeof(*mode->Info)){valid=FALSE;break;}
     GopInfoLog(i,mode->Info);
-     if(EFI_ERROR(status) || !path || route!=1 || !AmdGopParent(path) || !mode->FrameBufferBase ||
+     if(EFI_ERROR(status) || !path || route!=1 || !OtherGopParent(path) || !mode->FrameBufferBase ||
        !mode->FrameBufferSize || mode->Info->PixelFormat>PixelBlueGreenRedReserved8BitPerColor ||
        !mode->Info->HorizontalResolution || !mode->Info->VerticalResolution ||
        mode->Info->PixelsPerScanLine<mode->Info->HorizontalResolution ||
@@ -138,7 +138,7 @@ static BOOLEAN DisplayCheck(VOID) {
     BOOLEAN match=intel==1 && forwarded.Version==physical.Version && forwarded.PixelFormat==physical.PixelFormat &&
       forwarded.HorizontalResolution==physical.HorizontalResolution && forwarded.VerticalResolution==physical.VerticalResolution &&
       forwarded.PixelsPerScanLine==physical.PixelsPerScanLine;
-    GuLog("GOP console forwarded AMD match=%u\n",match);valid=valid && match;
+    GuLog("GOP console forwarded console-adapter match=%u\n",match);valid=valid && match;
   }
   GuFree(handles);GuLog("GOP result: valid=%u amd_physical=%zu\n",valid,(size_t)intel);
   return valid && intel==1 && GuLogReady();
@@ -268,7 +268,7 @@ static EFI_STATUS ColdCheck(VOID) {
   GuLog("cold state: chip=%#x plm=%#x gfw=%#x/%#x/%#x WPR2_HI=%#x SS0=%#x SS1=%#x\n",
     chip,plm,s.plm,s.boot,s.cpuctl,hi,ss0,ss1);
   UINT32 memory=GuRead32(0x1183a4);
-#if !defined(GU_EXPERIMENTAL_3090)
+#if !defined(GU_EXPERIMENTAL_UNLOCK)
   GuLog("DIAGNOSTIC PREFLIGHT ONLY: chip baseline=UNKNOWN SS0 baseline=UNKNOWN memory=%#x expected=%#x; cannot arm; no GPU writes/reset/DMA/driver release\n",memory,GU_DEVICE_MEMORY_SIZE);
   return Gu.fault?EFI_DEVICE_ERROR:EFI_NOT_READY;
 #else
@@ -331,7 +331,7 @@ static EFI_STATUS PromCheck(VOID) {
   GuFree(prom);Gu.prom_verified=good;GuLog("live PROM hash matched=%u\n",(unsigned)good);return good?EFI_SUCCESS:EFI_CRC_ERROR;
 }
 static EFI_STATUS Arm(VOID) {
-#if !defined(GU_EXPERIMENTAL_3090)
+#if !defined(GU_EXPERIMENTAL_UNLOCK)
   return EFI_UNSUPPORTED;
 #else
   if(!Gu.profile_verified || Gu.fault || !Gu.display_ok)return EFI_ACCESS_DENIED;
@@ -359,7 +359,7 @@ static EFI_STATUS Arm(VOID) {
 #else
   if(!Table->ConIn || !Table->ConIn->Reset || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
-  GuLog("EXPERIMENTAL MANUAL UNLOCK: profile=%s exact RTX3090 24GB / AMD display / verified PROM and assets.\n",GU_STOCK_PROFILE_NAME);
+  GuLog("EXPERIMENTAL MANUAL UNLOCK: profile=%s exact RTX3060 12GB / RTX 5070 display / verified PROM and assets.\n",GU_STOCK_PROFILE_NAME);
   if(PendingOwner.agent)GuLogText("U will release the RTX firmware driver, restore verified access settings if needed, then recheck and attempt once.\n");
   GuLogText("Press U to attempt once; Esc or 30-second timeout cancels.\n");
   if(!GuLogReady())return EFI_DEVICE_ERROR;
@@ -423,7 +423,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   if(EFI_ERROR(status))goto finish;
 #if defined(GU_AUTOMATIC_BOOT)
   GuLog("BUILD MODE: AUTOMATIC INTERNAL UNLOCK; profile=%s; Esc cancellation; all hardware gates retained.\n",GU_STOCK_PROFILE_NAME);
-#elif defined(GU_EXPERIMENTAL_3090)
+#elif defined(GU_EXPERIMENTAL_UNLOCK)
   GuLog("BUILD MODE: EXPERIMENTAL MANUAL UNLOCK; compile-time profile=%s. The shared I/O preflight banner above is superseded: exact-card checks and manual U can authorize one stock transaction.\n",GU_STOCK_PROFILE_NAME);
 #endif
   UINT8 secure=0xff;UINTN bytes=1;
@@ -438,7 +438,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   Stage="bar0";status=Step(BarCheck());if(EFI_ERROR(status))goto finish;
   Stage="prom";status=Step(PromCheck());if(EFI_ERROR(status))goto finish;
   Stage="diagnostic-cold-state";status=Step(ColdCheck());
-#if !defined(GU_EXPERIMENTAL_3090)
+#if !defined(GU_EXPERIMENTAL_UNLOCK)
   goto finish;
 #else
   if(EFI_ERROR(status))goto finish;

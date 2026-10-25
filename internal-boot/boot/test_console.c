@@ -18,17 +18,17 @@ static GRAPH Live;
 static int Scenario,Calls,Checks,OutputCalls,LogCalls;
 static EFI_HANDLE CalledAgent[2],CalledController[2];
 static EFI_SYSTEM_TABLE *LastTable;
-static EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE AmdMode,RtxMode;
-static EFI_GRAPHICS_OUTPUT_MODE_INFORMATION AmdInfo,RtxInfo;
-static EFI_GRAPHICS_OUTPUT_PROTOCOL AmdGop,RtxGop;
+static EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE OtherMode,RtxMode;
+static EFI_GRAPHICS_OUTPUT_MODE_INFORMATION OtherInfo,RtxInfo;
+static EFI_GRAPHICS_OUTPUT_PROTOCOL OtherGop,RtxGop;
 static EFI_SIMPLE_TEXT_OUTPUT_MODE TextMode;
 static EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL Text;
 static EFI_SIMPLE_TEXT_INPUT_PROTOCOL Keys;
-static EFI_PCI_IO_PROTOCOL AmdPci,RtxPci;
+static EFI_PCI_IO_PROTOCOL OtherPci,RtxPci;
 static EFI_DRIVER_BINDING_PROTOCOL OutBinding,GfxBinding;
 static EFI_LOADED_IMAGE_PROTOCOL OutImage,GfxImage;
 static UINT8 OutFilePath[24],GfxFilePath[24];
-static UINT8 TestAmdPath[36],TestRtxPath[36];
+static UINT8 TestOtherPath[36],TestRtxPath[36];
 static EFI_GUID Dummy={0x12345678,0,0,{0}};
 #ifdef GU_FULL_REPLAY_TEST
 static BOOLEAN FullMode;
@@ -60,7 +60,7 @@ static EFI_STATUS EFIAPI Locate(EFI_LOCATE_SEARCH_TYPE search,EFI_GUID *g,VOID *
 #endif
     *n=Scenario==9?2:1;
     *out=malloc(*n*sizeof(**out));(*out)[0]=FX_Rtx;
-    if(Scenario==29)(*out)[0]=FX_Amd;
+    if(Scenario==29)(*out)[0]=FX_Other;
     if(*n==2)(*out)[1]=FX_Rtx;
     return EFI_SUCCESS;
 #else
@@ -68,7 +68,7 @@ static EFI_STATUS EFIAPI Locate(EFI_LOCATE_SEARCH_TYPE search,EFI_GUID *g,VOID *
 #ifdef GU_FULL_REPLAY_TEST
     if(FullMode && Full.Released)*n=1;
 #endif
-    *out=malloc(*n*sizeof(**out));(*out)[0]=FX_Amd;if(*n>1)(*out)[1]=FX_Rtx;
+    *out=malloc(*n*sizeof(**out));(*out)[0]=FX_Other;if(*n>1)(*out)[1]=FX_Rtx;
     if(*n==3)(*out)[2]=FX_Rtx;
 #endif
   }
@@ -96,7 +96,7 @@ static EFI_STATUS EFIAPI ResetInput(EFI_SIMPLE_TEXT_INPUT_PROTOCOL *in,BOOLEAN e
 #endif
 static EFI_STATUS EFIAPI Output(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *out,CHAR16 *s) {
   (void)out;(void)s;OutputCalls++;
-  if(Scenario==21 && OutputCalls==2)AmdMode.FrameBufferBase=0;
+  if(Scenario==21 && OutputCalls==2)OtherMode.FrameBufferBase=0;
   return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **out) {
@@ -107,16 +107,16 @@ static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **out) {
   }
 #endif
   if(GuGuidEqual(g,&GopGuid)) {
-    if(h==FX_Amd)*out=&AmdGop;
+    if(h==FX_Other)*out=&OtherGop;
     if(h==FX_Rtx)*out=&RtxGop;
   } else if(GuGuidEqual(g,&PathGuid)) {
-    if(h==FX_Amd)*out=TestAmdPath;
+    if(h==FX_Other)*out=TestOtherPath;
     if(h==FX_Rtx)*out=TestRtxPath;
   } else if(GuGuidEqual(g,&PciGuid)) {
-    if(h==FX_AmdPci)*out=&AmdPci;
+    if(h==FX_OtherPci)*out=&OtherPci;
     if(h==FX_RtxPci)*out=&RtxPci;
   } else if(GuGuidEqual(g,&TextGuid)) {
-    if(h==FX_Amd || h==FX_Console || (h==FX_Rtx && Calls<2))*out=&Text;
+    if(h==FX_Other || h==FX_Console || (h==FX_Rtx && Calls<2))*out=&Text;
   } else if(GuGuidEqual(g,&InputGuid)) {
     if(h==FX_Input)*out=&Keys;
   } else if(GuGuidEqual(g,&BindingGuid)) {
@@ -130,12 +130,12 @@ static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **out) {
 }
 static EFI_STATUS EFIAPI FindPci(EFI_GUID *g,EFI_DEVICE_PATH_PROTOCOL **path,EFI_HANDLE *h) {
   if(!GuGuidEqual(g,&PciGuid))abort();
-  *h=(VOID *)*path==(VOID *)TestAmdPath?FX_AmdPci:FX_RtxPci;
-  if(Scenario==27)*h=FX_AmdPci; /* Wrong GPU behind a matching-looking path. */
+  *h=(VOID *)*path==(VOID *)TestOtherPath?FX_OtherPci:FX_RtxPci;
+  if(Scenario==27)*h=FX_OtherPci; /* Wrong GPU behind a matching-looking path. */
   *path=(VOID *)((UINT8 *)*path+24);return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Location(EFI_PCI_IO_PROTOCOL *io,UINTN *seg,UINTN *bus,UINTN *dev,UINTN *fun) {
-  *seg=*dev=*fun=0;*bus=io==&AmdPci?12:1;return EFI_SUCCESS;
+  *seg=*dev=*fun=0;*bus=io==&OtherPci?GU_OTHER_GPU_BUS:1;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Read(EFI_PCI_IO_PROTOCOL *io,EFI_PCI_IO_PROTOCOL_WIDTH width,UINT32 at,UINTN n,VOID *data) {
 #ifdef GU_FULL_REPLAY_TEST
@@ -143,7 +143,7 @@ static EFI_STATUS EFIAPI Read(EFI_PCI_IO_PROTOCOL *io,EFI_PCI_IO_PROTOCOL_WIDTH 
 #endif
   if(width!=EfiPciIoWidthUint32 || at!=0 || n!=16)abort();
   if(Scenario==13)return EFI_DEVICE_ERROR;
-  memcpy(data,io==&AmdPci?FixtureAmdConfig:FixtureRtxConfig,64);
+  memcpy(data,io==&OtherPci?FixtureOtherConfig:FixtureRtxConfig,64);
 #ifdef GU_SINGLE_RTX_CONSOLE
   if(Scenario==30)((UINT32 *)data)[1]^=4;
 #endif
@@ -168,13 +168,13 @@ static EFI_STATUS EFIAPI Disconnect(EFI_HANDLE controller,EFI_HANDLE agent,EFI_H
   if(Scenario==3 || (Scenario==7 && Calls==2))return EFI_DEVICE_ERROR;
   if(Scenario==19)return EFI_WARN_UNKNOWN_GLYPH;
   if(Scenario!=4)Drop(FX_Rtx,agent,Calls==1?&TextGuid:&GopGuid);
-  if(Scenario==5)Drop(FX_Amd,FX_OutAgent,&TextGuid);
-  if(Scenario==6)AmdMode.FrameBufferBase=0;
+  if(Scenario==5)Drop(FX_Other,FX_OutAgent,&TextGuid);
+  if(Scenario==6)OtherMode.FrameBufferBase=0;
   if(Scenario==10)Live.Edges[0].Count++;
   if(Scenario==16)Live.Edges[Live.Count++]=(EDGE){FX_Input,FX_GfxAgent,FX_Input,Dummy,16,1};
   if(Scenario==20)GfxBinding.Version++;
   if(Scenario==25)TestRtxPath[28]^=1;
-  if(Scenario==26)TestAmdPath[28]^=1;
+  if(Scenario==26)TestOtherPath[28]^=1;
   return EFI_SUCCESS;
 }
 static EFI_STATUS Log(VOID *context,const char *event,EFI_STATUS s) {
@@ -182,28 +182,28 @@ static EFI_STATUS Log(VOID *context,const char *event,EFI_STATUS s) {
   if(Scenario==2 && !strcmp(event,"detach-rtx-textout-intent"))Live.Edges[0].Count++;
   if(Scenario==11 && !strcmp(event,"detach-rtx-textout-intent"))return EFI_DEVICE_ERROR;
   if(Scenario==12 && !strcmp(event,"detach-rtx-textout-return"))return EFI_DEVICE_ERROR;
-  if(Scenario==22 && !strcmp(event,"stage2a-success-no-unlock-no-gop-removal"))Drop(FX_Amd,FX_OutAgent,&TextGuid);
+  if(Scenario==22 && !strcmp(event,"stage2a-success-no-unlock-no-gop-removal"))Drop(FX_Other,FX_OutAgent,&TextGuid);
   return EFI_SUCCESS;
 }
 static EFI_STATUS Run(int scenario) {
   Scenario=scenario;Calls=0;OutputCalls=0;LogCalls=0;
-  memcpy(TestAmdPath,AmdPath,36);memcpy(TestRtxPath,RtxPath,36);
+  memcpy(TestOtherPath,OtherPath,36);memcpy(TestRtxPath,RtxPath,36);
   if(scenario==23)TestRtxPath[28]=0x40; /* FULL02 observed output endpoint. */
-  if(scenario==24){TestRtxPath[28]=0x40;TestAmdPath[28]^=0x20;}
+  if(scenario==24){TestRtxPath[28]=0x40;TestOtherPath[28]^=0x20;}
   if(scenario==28)TestRtxPath[17]^=1; /* Different PCI ancestry. */
   Live.Count=sizeof(FixtureEdges)/sizeof(FixtureEdges[0]);memcpy(Live.Edges,FixtureEdges,sizeof(FixtureEdges));
   if(scenario==1)Live.Edges[Live.Count++]=(EDGE){FX_Rtx,FX_Input,FX_Rtx,TextGuid,16,1};
   if(scenario==14)Live.Edges[Live.Count++]=(EDGE){FX_Rtx,FX_OutAgent,FX_Input,Dummy,8,1};
-  if(scenario==15)Drop(FX_Amd,FX_OutAgent,&TextGuid);
+  if(scenario==15)Drop(FX_Other,FX_OutAgent,&TextGuid);
   static EFI_BOOT_SERVICES bs;static EFI_SYSTEM_TABLE t;
   bs=(EFI_BOOT_SERVICES){0};t=(EFI_SYSTEM_TABLE){0};LastTable=&t;
   bs.AllocatePool=Allocate;bs.FreePool=Free;bs.RaiseTPL=Raise;bs.RestoreTPL=Restore;
   bs.LocateHandleBuffer=Locate;bs.ProtocolsPerHandle=Protocols;bs.OpenProtocolInformation=Opens;
   bs.HandleProtocol=Handle;bs.LocateDevicePath=FindPci;bs.DisconnectController=Disconnect;
-  AmdInfo=(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION){0};AmdInfo.HorizontalResolution=1920;AmdInfo.VerticalResolution=1080;AmdInfo.PixelsPerScanLine=1920;
-  RtxInfo=AmdInfo;
-  AmdMode=(EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE){0};AmdMode.MaxMode=9;AmdMode.Info=&AmdInfo;AmdMode.SizeOfInfo=sizeof(AmdInfo);AmdMode.FrameBufferBase=0xfce0000000;AmdMode.FrameBufferSize=1920*1080*4;
-  RtxMode=AmdMode;RtxMode.FrameBufferBase=0xfcc0000000;AmdGop.Mode=&AmdMode;RtxGop.Mode=&RtxMode;
+  OtherInfo=(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION){0};OtherInfo.HorizontalResolution=1920;OtherInfo.VerticalResolution=1080;OtherInfo.PixelsPerScanLine=1920;
+  RtxInfo=OtherInfo;
+  OtherMode=(EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE){0};OtherMode.MaxMode=9;OtherMode.Info=&OtherInfo;OtherMode.SizeOfInfo=sizeof(OtherInfo);OtherMode.FrameBufferBase=0xfce0000000;OtherMode.FrameBufferSize=1920*1080*4;
+  RtxMode=OtherMode;RtxMode.FrameBufferBase=0xfcc0000000;OtherGop.Mode=&OtherMode;RtxGop.Mode=&RtxMode;
 #ifdef GU_SINGLE_RTX_CONSOLE
   RtxMode.Info=&RtxInfo;
 #endif
@@ -213,15 +213,15 @@ static EFI_STATUS Run(int scenario) {
   Keys.Reset=ResetInput;
   if(scenario==31)Keys.Reset=NULL;
 #endif
-  AmdPci=(EFI_PCI_IO_PROTOCOL){0};AmdPci.GetLocation=Location;AmdPci.Pci.Read=Read;RtxPci=AmdPci;
+  OtherPci=(EFI_PCI_IO_PROTOCOL){0};OtherPci.GetLocation=Location;OtherPci.Pci.Read=Read;RtxPci=OtherPci;
   OutBinding=(EFI_DRIVER_BINDING_PROTOCOL){0};GfxBinding=OutBinding;
-  OutBinding.Version=GfxBinding.Version=0x10;
+  OutBinding.Version=GU_CONSOLE_TEXT_VERSION;GfxBinding.Version=GU_CONSOLE_GFX_VERSION;
   OutBinding.DriverBindingHandle=FX_OutAgent;GfxBinding.DriverBindingHandle=FX_GfxAgent;
   OutBinding.ImageHandle=FX_OutImage;GfxBinding.ImageHandle=FX_GfxImage;
-  OutBinding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)0x101494;GfxBinding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)0x200f04;
+  OutBinding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)(0x100000+GU_CONSOLE_TEXT_STOP);GfxBinding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)(0x200000+GU_CONSOLE_GFX_STOP);
   OutImage=(EFI_LOADED_IMAGE_PROTOCOL){0};GfxImage=OutImage;
-  OutImage.ImageBase=(VOID *)0x100000;OutImage.ImageSize=0x7820;OutImage.ImageCodeType=EfiBootServicesCode;
-  GfxImage.ImageBase=(VOID *)0x200000;GfxImage.ImageSize=0x48a0;GfxImage.ImageCodeType=EfiBootServicesCode;
+  OutImage.ImageBase=(VOID *)0x100000;OutImage.ImageSize=GU_CONSOLE_TEXT_SIZE;OutImage.ImageCodeType=EfiBootServicesCode;
+  GfxImage.ImageBase=(VOID *)0x200000;GfxImage.ImageSize=GU_CONSOLE_GFX_SIZE;GfxImage.ImageCodeType=EfiBootServicesCode;
   memcpy(OutFilePath,(UINT8[]){4,6,20,0},4);memcpy(OutFilePath+4,&OutFile,16);memcpy(OutFilePath+20,(UINT8[]){127,255,4,0},4);
   memcpy(GfxFilePath,(UINT8[]){4,6,20,0},4);memcpy(GfxFilePath+4,&GfxFile,16);memcpy(GfxFilePath+20,(UINT8[]){127,255,4,0},4);
   OutImage.FilePath=(VOID *)OutFilePath;GfxImage.FilePath=(VOID *)GfxFilePath;
@@ -245,7 +245,7 @@ static EFI_STATUS FlowCapture(VOID *v) {
 #ifdef GU_SINGLE_RTX_CONSOLE
     RtxMode.FrameBufferBase=0;
 #else
-    AmdMode.FrameBufferBase=0;
+    OtherMode.FrameBufferBase=0;
 #endif
   return f->captures==1?f->before:f->after;
 }
@@ -257,7 +257,7 @@ static EFI_STATUS FlowReady(VOID *v) {
 #ifdef GU_SINGLE_RTX_CONSOLE
     RtxMode.FrameBufferBase=0;
 #else
-    Drop(FX_Amd,FX_OutAgent,&TextGuid);
+    Drop(FX_Other,FX_OutAgent,&TextGuid);
 #endif
   return f->ready;
 }
@@ -282,7 +282,7 @@ static VOID FlowTests(VOID) {
     f=(FLOW_TEST){.after=bad[i]};Check(FlowRun(&f)==bad[i] && !f.boots && f.detaches==1,"post capture failure never boots");
     f=(FLOW_TEST){.record=bad[i]};Check(FlowRun(&f)==bad[i] && !f.boots && f.detaches==1,"final log failure never boots");
     f=(FLOW_TEST){.ready=bad[i]};Check(FlowRun(&f)==bad[i] && !f.boots,"file close failure never boots");
-    f=(FLOW_TEST){.verify=bad[i]};Check(FlowRun(&f)==bad[i] && !f.boots,"AMD loss after final log/capture/file-close never boots");
+    f=(FLOW_TEST){.verify=bad[i]};Check(FlowRun(&f)==bad[i] && !f.boots,"console adapter loss after final log/capture/file-close never boots");
     f=(FLOW_TEST){.windows=bad[i]};Check(FlowRun(&f)==bad[i] && f.boots==1,"returned Windows error preserved");
   }
   for(int late=1;late<=3;late++) {

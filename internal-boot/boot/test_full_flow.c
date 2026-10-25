@@ -29,7 +29,7 @@ int main(void) {
     t=(TEST){.before=bad[i]};Check(Run(&t)==bad[i] && !t.releases && !t.unlocks && !t.boots,"capture failure blocks all mutations");
     t=(TEST){.release=bad[i]};Check(Run(&t)==bad[i] && t.releases==1 && t.captures==2 && !t.unlocks && !t.boots,"partial prepare failure has evidence but no unlock/Windows/retry");
     t=(TEST){.after=bad[i]};Check(Run(&t)==bad[i] && t.releases==1 && !t.unlocks && !t.boots,"post capture failure blocks unlock/Windows");
-    t=(TEST){.verify=bad[i]};Check(Run(&t)==bad[i] && t.verifies==1 && !t.unlocks && !t.boots,"late target/AMD drift blocks unlock/Windows");
+    t=(TEST){.verify=bad[i]};Check(Run(&t)==bad[i] && t.verifies==1 && !t.unlocks && !t.boots,"late target/console adapter drift blocks unlock/Windows");
     t=(TEST){.unlock=bad[i]};Check(Run(&t)==bad[i] && t.unlocks==1 && !t.boots,"original app failure/timeout/cancel/warning never boots Windows");
     t=(TEST){.windows=bad[i]};Check(Run(&t)==bad[i] && t.unlocks==1 && t.boots==1,"returned Windows status is preserved");
   }

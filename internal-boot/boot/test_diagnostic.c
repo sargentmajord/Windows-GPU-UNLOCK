@@ -78,7 +78,7 @@ static EFI_STATUS EFIAPI Location(EFI_PCI_IO_PROTOCOL *io,UINTN *seg,UINTN *bus,
 }
 static EFI_STATUS EFIAPI Read(EFI_PCI_IO_PROTOCOL *io,EFI_PCI_IO_PROTOCOL_WIDTH width,UINT32 at,UINTN n,VOID *data) {
   (void)io;if(width!=EfiPciIoWidthUint32 || at!=0 || n!=16)abort();
-  memset(data,0,n*4);((UINT32 *)data)[0]=0x220410de;ReadCalls++;return EFI_SUCCESS;
+  memset(data,0,n*4);((UINT32 *)data)[0]=0x254410de;ReadCalls++;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI DriverStop(EFI_DRIVER_BINDING_PROTOCOL *d,EFI_HANDLE h,UINTN n,EFI_HANDLE *children) {
   (void)d;(void)h;(void)n;(void)children;StopCalls++;abort();
@@ -109,7 +109,7 @@ int main(void) {
   Check(strstr(Output,"capture-complete=1")!=NULL,"complete marker");
   Check(strstr(Output,"attributes=0x0000000000000008")!=NULL,"child edge retained");
   Check(strstr(Output,"path-node raw=7f010400")!=NULL,"multi-instance separator retained");
-  Check(strstr(Output,"pci config-dwords=220410de")!=NULL && ReadCalls==2,"GPU identification is read-only");
+  Check(strstr(Output,"pci config-dwords=254410de")!=NULL && ReadCalls==2,"GPU identification is read-only");
   Check(strstr(Output,"driver image=")!=NULL && strstr(Output,"image-file-path-node")!=NULL,"driver/image provenance");
   for(int i=1;i<=7;i++) {
     Check(Run(i)==EFI_NOT_READY,"truncated or failed snapshot is incomplete");

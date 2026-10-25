@@ -4,7 +4,7 @@
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/SimpleTextIn.h>
 #include <Protocol/SimpleTextOut.h>
-#if !defined(GU_AUTOMATIC_BOOT) || !defined(GU_INTERNAL_BOOT) || !defined(GU_EXPERIMENTAL_3090) || !defined(GU_ENTRY_LATCHED_SS1_FULL)
+#if !defined(GU_AUTOMATIC_BOOT) || !defined(GU_INTERNAL_BOOT) || !defined(GU_EXPERIMENTAL_UNLOCK) || !defined(GU_ENTRY_LATCHED_SS1_FULL)
 #error Headless research requires the exact automatic internal full profile
 #endif
 typedef struct {EFI_HANDLE handle,agent,controller;EFI_GUID protocol;UINT32 attributes,count;} GU_HEADLESS_EDGE;

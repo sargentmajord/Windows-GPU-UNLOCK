@@ -1,8 +1,7 @@
 # Prepare the firmware assets
 
-**English** | [한국어](ASSETS.ko.md)
 
-NVIDIA firmware, VBIOS/PROM dumps and driver DLLs are not included. Exact sizes and SHA-256 hashes of the required files are in [`unlock/assets.json`](../unlock/assets.json).
+NVIDIA firmware, VBIOS/PROM dumps and driver DLLs are not included. Exact sizes and SHA-256 hashes of the required files are in [`unlock/assets.json`](../internal-boot/unlock/assets.json).
 
 Use legally available original inputs and follow the upstream [firmware instructions at the pinned commit](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956/firmware). This case uses the **GA102 / 610.43.03** firmware family. This is **not** an instruction to install Windows driver 610.43.03; the successful Windows case used 617.14.
 

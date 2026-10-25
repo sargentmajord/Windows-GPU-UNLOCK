@@ -311,10 +311,10 @@ static EFI_STATUS EFIAPI file_close(EFI_FILE_PROTOCOL *f){
 static EFI_STATUS EFIAPI file_open(EFI_FILE_PROTOCOL *f,EFI_FILE_PROTOCOL **out,CHAR16 *name,UINT64 mode,UINT64 attributes) {
   FILE_FAKE *v=(FILE_FAKE *)f;char path[128];narrow(path,sizeof(path),name);CHECK(v->open);*out=NULL;
   int target=-1;
-#if defined(GU_EXPERIMENTAL_3090)
-  if(v->kind==0 && !strcmp(path,"\\RTX3090-UNLOCK"))target=1;
+#if defined(GU_EXPERIMENTAL_UNLOCK)
+  if(v->kind==0 && !strcmp(path,"\\RTX3060-UNLOCK"))target=1;
 #else
-  if(v->kind==0 && !strcmp(path,"\\RTX3090-PREFLIGHT"))target=1;
+  if(v->kind==0 && !strcmp(path,"\\RTX3060-PREFLIGHT"))target=1;
 #endif
 #ifdef GU_AUTOMATIC_BOOT
   else if(v->kind==1 && !strncmp(path,"AUTO",4)) {

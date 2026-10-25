@@ -80,14 +80,14 @@ static void TestCapture(const UINT32 Captured[64]) {
   GU_CAPS Caps;
   memcpy(C, Captured, sizeof(C));
   memcpy(Before, C, sizeof(C));
-   Check(GuCheckConfig(C, 0, 1, 0, 0, &Caps), "captured RTX3090 RUN00 config accepted");
+   Check(GuCheckConfig(C, 0, 1, 0, 0, &Caps), "captured RTX3060 config accepted");
   Check(Caps.pm == 0x60 && Caps.msi == 0x68 && Caps.pcie == 0x78 &&
         Caps.msix == 0 && Caps.pcie_version == 2,
         "capture returns linked caps only; c8 is unlinked");
   Check(memcmp(C, Before, sizeof(C)) == 0, "validation does not modify config");
-  C[0]=0x220610de; Reject(C,"RTX3080 rejected with otherwise real config");
-  memcpy(C,Before,sizeof(C));C[0]=0x164e1002;C[11]=0x88771043;
-  Reject(C,"AMD display cannot be target");memcpy(C,Before,sizeof(C));
+  C[0]=0x220610de; Reject(C,"Another GPU model rejected with otherwise real config");
+  memcpy(C,Before,sizeof(C));C[0]=GU_OTHER_GPU_ID;C[11]=GU_OTHER_GPU_SUBSYSTEM;
+  Reject(C,"console adapter display cannot be target");memcpy(C,Before,sizeof(C));
   Byte(C, 0xb5, 0xc8);
   Check(GuCheckConfig(C, 0, 1, 0, 0, &Caps) && Caps.msix == 0xc8,
         "synthetically linked captured MSI-X is disabled and accepted");
@@ -346,22 +346,23 @@ static void LegacyTestPaths(void) {
 }
 
 static void TestPaths(void) {
-  static const UINT8 Amd[]={2,1,12,0,0xd0,0x41,3,0xa,0,0,0,0,
-    1,1,6,0,1,8,1,1,6,0,0,0,2,3,8,0,0,3,1,0x80,0x7f,0xff,4,0};
-  UINT8 P[sizeof(Amd)];
-  Check(Path(Amd,sizeof(Amd))==1,"exact RUN00 AMD GOP path accepted");
-  Check(Path(Intel,sizeof(Intel))==0,"old Intel GOP rejected");
-  Check(Path(Rtx,sizeof(Rtx))==0,"old RTX route function rejected");
+  static const UINT8 Other[]={GU_OTHER_GPU_PATH_BYTES}; /* this machine's console adapter (RTX 5070) */
+  UINT8 P[sizeof(Other)];
+  Check(Path(Other,sizeof(Other))==1,"exact captured console-adapter GOP path accepted");
+  Check(Path(Intel,sizeof(Intel))==0,"foreign Intel GOP rejected");
+  /* A route behind a root-port function that is neither this machine's target nor its console adapter must be rejected. */
+  memcpy(P,Rtx,sizeof(Rtx));P[16]=2;
+  Check(Path(P,sizeof(Rtx))==0,"RTX route behind an unknown root-port function rejected");
   Check(!GuDisplayPath(NULL,256),"null path rejected");
-  for(unsigned i=0;i<sizeof(Amd);i++) {
-    Check(!Path(Amd,i),"each truncated AMD GOP rejected");
-    memcpy(P,Amd,sizeof(P));P[i]^=0x40;
-    Check(!Path(P,sizeof(P)),"each changed AMD GOP byte rejected");
+  for(unsigned i=0;i<sizeof(Other);i++) {
+    Check(!Path(Other,i),"each truncated console adapter GOP rejected");
+    memcpy(P,Other,sizeof(P));P[i]^=0x40;
+    Check(!Path(P,sizeof(P)),"each changed console adapter GOP byte rejected");
   }
-  memcpy(P,Amd,sizeof(P));P[16]=0;Check(!Path(P,sizeof(P)),"wrong bridge function rejected");
-  memcpy(P,Amd,sizeof(P));P[6]=8;Check(!Path(P,sizeof(P)),"uncaptured ACPI root rejected");
-  memcpy(P,Amd,24);memcpy(P+24,Amd+32,4);
-  Check(!Path(P,28),"AMD GOP missing ADR rejected");
+  memcpy(P,Other,sizeof(P));P[16]=(UINT8)(GU_OTHER_GPU_ROOT_FUNCTION+GU_ROOT_PORT_FUNCTION+2U);Check(!Path(P,sizeof(P)),"wrong bridge function rejected");
+  memcpy(P,Other,sizeof(P));P[6]=8;Check(!Path(P,sizeof(P)),"uncaptured ACPI root rejected");
+  memcpy(P,Other,24);memcpy(P+24,Other+32,4);
+  Check(!Path(P,28),"console adapter GOP missing ADR rejected");
   (void)LegacyTestPaths; /* Preserved historical vectors, not this board's contract. */
 }
 
@@ -377,6 +378,6 @@ int main(int Argc, char **Argv) {
     fprintf(stderr, "%u/%u checks failed\n", Failures, Checks);
     return 1;
   }
-  printf("PASS %u preflight checks (real RTX3090 RUN00 fixture plus malformed inputs)\n", Checks);
+  printf("PASS %u preflight checks (real RTX3060 capture fixture plus malformed inputs)\n", Checks);
   return 0;
 }

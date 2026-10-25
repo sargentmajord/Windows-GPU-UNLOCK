@@ -1,6 +1,6 @@
 # Portability design and validation gates
 
-[English README](../README.md) | [한국어 README](../README.ko.md)
+[README](../README.md)
 
 This is a staged design, **not a declaration of expanded EFI support**. The present implementation and successful-case binary remain exact-machine experiments. Universal execution across all GPUs or firmware cannot be promised from the available evidence.
 
@@ -17,7 +17,7 @@ An ASUS motherboard or AMD CPU is not inherently the unlock algorithm. They curr
 | Transaction containment | Ownership, decode restoration, BME, DMA, FLR and cleanup | Preserve guards and bind every phase to the same latched device/profile | Fault injection, timeouts, cleanup failure, retained resources and no retry in the same boot |
 | Windows handoff | Return to ASUS firmware, manual no-reset Boot Override | Document verified firmware routes; investigate direct chainload separately | No-reset behavior, failure handling and Windows driver recovery on each platform |
 
-The executable sources are [`port.h`](../unlock/port.h), [`port.c`](../unlock/port.c), [`checks.c`](../unlock/checks.c), [`app.c`](../unlock/app.c), [`ownership.c`](../unlock/ownership.c) and [`vendor/unlock_610.c`](../unlock/vendor/unlock_610.c). In particular, `ConfigCheck` pins additional PCI dwords, while `ColdCheck` and `PromCheck` impose independent state and identity requirements. Removing AMD IDs or changing BDF/PROM constants would leave these other assumptions unresolved.
+The executable sources are [`port.h`](../internal-boot/unlock/port.h), [`port.c`](../internal-boot/unlock/port.c), [`checks.c`](../internal-boot/unlock/checks.c), [`app.c`](../internal-boot/unlock/app.c), [`ownership.c`](../internal-boot/unlock/ownership.c) and [`vendor/unlock_610.c`](../internal-boot/unlock/vendor/unlock_610.c). In particular, `ConfigCheck` pins additional PCI dwords, while `ColdCheck` and `PromCheck` impose independent state and identity requirements. Removing AMD IDs or changing BDF/PROM constants would leave these other assumptions unresolved.
 
 ## Stages
 
@@ -34,7 +34,7 @@ The executable sources are [`port.h`](../unlock/port.h), [`port.c`](../unlock/po
 - Display verification must establish independence from the target GPU. Merely finding another GOP or matching a vendor name is insufficient. No-iGPU, multi-GPU and hybrid laptop paths need explicit designs.
 - Profile tests cover wrong subsystem/revision, PROM/firmware digest mismatch, invalid cold state, selector changes and memory/WPR bounds. Default and unknown profiles remain non-writing.
 - Preserve one-shot confirmation, phase guards, timeout/retry containment, driver ownership, decode restoration, DMA lifetime, FLR cleanup and `STOP / POWER OFF` on unsafe return.
-- Preserve the existing negative cases in `test_checks.c`, `test_port.c`, `test_3090_preflight.c` and related transaction/ownership tests. Change expectations only when a replacement invariant is implemented and independently verified.
+- Preserve the existing negative cases in `test_checks.c`, `test_port.c`, `test_preflight.c` and related transaction/ownership tests. Change expectations only when a replacement invariant is implemented and independently verified.
 - A mock pass is software evidence. Hardware support needs exact build/profile provenance, complete cleanup, Windows driver recovery and controlled before/after measurements. Stability and real-application performance require their own evidence.
 
 No hardware support is added by a model-name match, an inventory submission or a successful build. Firmware redistribution rules and existing licenses still apply.

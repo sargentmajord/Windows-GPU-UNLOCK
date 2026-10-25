@@ -1,6 +1,5 @@
 # Compare performance under the same conditions
 
-**English** | [한국어](BENCHMARK.ko.md)
 
 The benchmark uses the upstream 4096×4096 cuBLAS GEMM: FP32 pedantic, FP16/BF16 inputs with FP32 accumulation/output, two seconds of warmup per precision and 30 samples. Local changes select the RTX 3090 and add metadata inspection. Result checking remains limited to the first and last output elements, as in upstream.
 
@@ -17,4 +16,4 @@ The measured build used VS2019 BuildTools MSVC 14.29. For a different installati
 
 Save and close ComfyUI, video, recording and other GPU workloads before measuring. Start limits are GPU utilization at most 5%, VRAM at most 2048 MiB and temperature at most 65°C. The runner records three runs in a new timestamped `benchmark/results/` directory. It does not forcibly terminate other processes.
 
-Use the same executable, driver, power limit, overclock and temperature conditions before and after. This tool does not change GPU settings. FP16/BF16 Tensor throughput gains do not imply the same speedup in complete games, video tasks or ComfyUI workflows. See [the measured case and its limits](RESULTS.en.md).
+Use the same executable, driver, power limit, overclock and temperature conditions before and after. This tool does not change GPU settings. FP16/BF16 Tensor throughput gains do not imply the same speedup in complete games, video tasks or ComfyUI workflows. See [the measured case and its limits](PROFILE-Z790-3060.en.md).

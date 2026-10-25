@@ -36,15 +36,28 @@
 #error Full unlock and non-unlock experiments must remain separate builds
 #endif
 #endif
+/* Release test: the full driver release and verification, then Windows. The unlock
+ * application is neither loaded nor linked; nothing is written to the card. */
+#ifdef GU_RELEASE_ONLY
+#ifndef GU_FULL_UNLOCK
+#error Release-only builds extend the full flow
+#endif
+#if defined(GU_EXPERIMENTAL_UNLOCK) || defined(GU_AUTOMATIC_BOOT) || defined(GU_HEADLESS_RESEARCH)
+#error Release-only builds must not combine with any unlock mode
+#endif
+#endif
+#if !defined(GU_DIAGNOSTIC_ONLY) && !defined(GU_RELEASE_ONLY)
+#define GU_LOADS_UNLOCK 1
+#endif
 
 static EFI_GUID LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 static EFI_GUID PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID;
-#ifndef GU_DIAGNOSTIC_ONLY
+#ifdef GU_LOADS_UNLOCK
 static EFI_GUID InfoGuid=EFI_FILE_INFO_ID;
 #endif
 static EFI_SYSTEM_TABLE *Table;
 static EFI_HANDLE Self,OwnDevice,WindowsImage;
-#ifndef GU_DIAGNOSTIC_ONLY
+#ifdef GU_LOADS_UNLOCK
 static EFI_HANDLE UnlockImage;
 #endif
 static EFI_FILE_PROTOCOL *Root,*Log;
@@ -117,24 +130,26 @@ static EFI_STATUS OpenLog(VOID) {
 #ifdef GU_AUTOMATIC_BOOT
   for(UINTN i=0;i<1000000;i++) {
 #ifdef GU_HEADLESS_RESEARCH
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\HLS000000.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\HLS000000.TXT";
 #else
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\BOOT000000.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\BOOT000000.TXT";
 #endif
 #else
   for(UINTN i=0;i<100;i++) {
-#ifdef GU_FULL_UNLOCK
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\FULL00.TXT";
+#ifdef GU_RELEASE_ONLY
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\REL00.TXT";
+#elif defined(GU_FULL_UNLOCK)
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\FULL00.TXT";
 #elif defined(GU_CONSOLE_PREPARE)
 #ifdef GU_SINGLE_RTX_CONSOLE
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\R2C00.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\R2C00.TXT";
 #else
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\PREP00.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\PREP00.TXT";
 #endif
 #elif defined(GU_DIAGNOSTIC_ONLY)
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\DIAG00.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\DIAG00.TXT";
 #else
-    CHAR16 name[]=L"\\RTX3090-UNLOCK\\HANDOFF00.TXT";
+    CHAR16 name[]=L"\\RTX3060-UNLOCK\\HANDOFF00.TXT";
 #endif
 #endif
     UINTN n=0;while(name[n])n++;
@@ -166,7 +181,7 @@ static EFI_STATUS Record(VOID *Context,const char *Event,EFI_STATUS Status) {
   if(s!=EFI_SUCCESS || written!=n)return EFI_DEVICE_ERROR;
   return Log->Flush(Log);
 }
-#ifndef GU_DIAGNOSTIC_ONLY
+#ifdef GU_LOADS_UNLOCK
 static EFI_STATUS LoadUnlock(VOID) {
   EFI_FILE_PROTOCOL *file=NULL;
 #ifdef GU_HEADLESS_RESEARCH
@@ -216,7 +231,7 @@ static EFI_STATUS Prepare(VOID *Context) {
   if(s!=EFI_SUCCESS || windows==own)return EFI_COMPROMISED_DATA;
   s=OpenLog();if(s!=EFI_SUCCESS)return s;
   s=Record(NULL,"internal-handoff-v1",EFI_SUCCESS);if(s!=EFI_SUCCESS)return s;
-#ifndef GU_DIAGNOSTIC_ONLY
+#ifdef GU_LOADS_UNLOCK
   s=LoadUnlock();if(s!=EFI_SUCCESS)return s;
 #endif
   EFI_DEVICE_PATH_PROTOCOL *path=NULL;
@@ -246,19 +261,26 @@ static EFI_STATUS Select(VOID *Context,BOOLEAN *Skip) {
 #endif
 static EFI_STATUS Unlock(VOID *Context) {
   (void)Context;
+#ifdef GU_RELEASE_ONLY
+  Say(L"Release test: no unlock application in this build. Nothing is written to the card.\r\n");
+  return Record(NULL,"release-only-no-unlock",EFI_SUCCESS);
+#else
   return Table->BootServices->StartImage(UnlockImage,NULL,NULL);
+#endif
 }
 #endif
 #ifdef GU_FULL_UNLOCK
 static EFI_STATUS FullChoice(VOID *Context,BOOLEAN *Skip) {
   (void)Context;*Skip=FALSE;
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
-#ifdef GU_HEADLESS_RESEARCH
+#ifdef GU_RELEASE_ONLY
+  Say(L"RTX 3060 DRIVER RELEASE TEST. NO UNLOCK, nothing is written to the card.\r\nThe 3060 display may go blank; the RTX 5070 console stays. Then Windows starts by itself.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: power off, then F11 Windows Boot Manager.\r\n");
+#elif defined(GU_HEADLESS_RESEARCH)
   Say(L"SINGLE RTX HEADLESS UNLOCK RESEARCH: one guarded attempt, then Windows.\r\nNo key required. Esc within 5 seconds skips all changes.\r\nScreen may stop updating. Errors stop without reset/retry; power off and F8 Windows Boot Manager.\r\n");
 #elif defined(GU_AUTOMATIC_BOOT)
-  Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep AMD display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
+  Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep the RTX 5070 display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
 #else
-  Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. AMD display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
+  Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. RTX 5070 display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
 #endif
   for(UINTN i=0;i<50;i++) {
     EFI_INPUT_KEY key;EFI_STATUS s=Table->ConIn->ReadKeyStroke(Table->ConIn,&key);
@@ -293,7 +315,11 @@ static EFI_STATUS ReportVerification(EFI_STATUS s) {
   return s==EFI_SUCCESS?written:s;
 }
 static EFI_STATUS FullWindows(VOID *Context) {
+#ifdef GU_RELEASE_ONLY
+  (void)Context;Say(L"Release test finished. Checking Windows handoff, no reset.\r\n");
+#else
   (void)Context;Say(L"Unlock returned success. Checking Windows handoff, no reset.\r\n");
+#endif
   EFI_STATUS s=Record(NULL,"windows-preclose-verify-begin",EFI_SUCCESS);if(s!=EFI_SUCCESS)return s;
   s=GuVerifyReleased(Table,FALSE);
   s=ReportVerification(s);if(s!=EFI_SUCCESS)return s;
@@ -339,7 +365,7 @@ static EFI_STATUS PrepareChoice(VOID *Context,BOOLEAN *Skip) {
   Say(L"R2 AUTO CONSOLE TEST: NO UNLOCK, NVIDIA GOP RETAINED.\r\nNo key required: console detach, state verification, then Windows.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: power off, then F8 Windows Boot Manager.\r\n");
   return GuResearchChooseInput(Table,Skip);
 #else
-  Say(L"RTX console detach TEST. No unlock. Keep AMD display connected.\r\nPress Esc within 5 seconds to skip the test and start Windows.\r\n");
+  Say(L"RTX console detach TEST. No unlock. Keep the RTX 5070 display connected.\r\nPress Esc within 5 seconds to skip the test and start Windows.\r\n");
   for(UINTN i=0;i<50;i++) {
     EFI_INPUT_KEY key;EFI_STATUS s=Table->ConIn->ReadKeyStroke(Table->ConIn,&key);
     if(s==EFI_SUCCESS && (key.ScanCode==0x17 || key.UnicodeChar==27)){*Skip=TRUE;return EFI_SUCCESS;}

@@ -67,7 +67,9 @@ static UINT8 config[256],prom[1024*1024];
 static UINT32 core_captured_config[64];
 static BOOLEAN core_use_capture;
 static UINT32 registers[0x1000000/4];
-static UINT8 gsp_dmem[0x800];
+static UINT8 gsp_dmem[0x1000];
+/* Top of this profile's video memory; the layout below is relative to it. */
+#define PROFILE_FB_TOP ((UINT64)GU_DEVICE_MEMORY_SIZE<<20)
 static struct {
   enum scenario mode;
   UINTN buffer_count,pool_count,pool_live,find_hint;
@@ -129,19 +131,22 @@ static UINT8 *dma_pointer(UINT64 address,UINTN bytes) {
   fake.dma_reads++;return (UINT8 *)b->cpu+(UINTN)(address-b->dma);
 }
 static VOID check_fwsec_image(void) {
-#ifdef GU_EXPERIMENTAL_3090
+#ifdef GU_EXPERIMENTAL_UNLOCK
   struct gpu_unlock_fwsec fw;UINT32 sig_at;
   CHECK(!gpu_unlock_vbios_fwsec(prom,sizeof(prom),&fw));
-  CHECK(fw.image_off==0x4239c && fw.image_size==0xde00 && fw.dmem_size==sizeof(gsp_dmem));
+  /* This card's video BIOS: image 0xed00, DMEM 0x980 (not a multiple of 256), loaded as 0xa00. */
+  UINT32 dmem_dma;
+  CHECK(fw.image_size==0xed00 && fw.dmem_size==0x980);
+  dmem_dma=(fw.dmem_size+255u)&~255u;CHECK(dmem_dma==0xa00 && dmem_dma<=sizeof(gsp_dmem));
   CHECK(!gpu_unlock_fwsec_sig_offset(fw.sig_versions,2,384,&sig_at));
   UINT64 last_source=((UINT64)registers[(GSP+0x110)/4]<<8)|((UINT64)registers[(GSP+0x128)/4]<<40);
   UINT8 *image=dma_pointer(last_source-fw.data_off,fw.image_size);
-  CHECK(!memcmp(gsp_dmem,image+fw.data_off,sizeof(gsp_dmem)));
+  CHECK(!memcmp(gsp_dmem,image+fw.data_off,dmem_dma));
   CHECK(!memcmp(gsp_dmem+fw.pkc_off,prom+fw.sig_off+sig_at,384));
-  UINT8 expected[0xde00];memcpy(expected,prom+fw.image_off,sizeof(expected));
-  CHECK(!gpu_unlock_fwsec_patch_frts(expected,&fw,0x5ffe00000ULL));
+  UINT8 expected[0xed00];memcpy(expected,prom+fw.image_off,sizeof(expected));
+  CHECK(!gpu_unlock_fwsec_patch_frts(expected,&fw,PROFILE_FB_TOP-0x200000ULL));
   memcpy(expected+fw.data_off+fw.pkc_off,prom+fw.sig_off+sig_at,384);
-  CHECK(!memcmp(gsp_dmem,expected+fw.data_off,sizeof(gsp_dmem)));
+  CHECK(!memcmp(gsp_dmem,expected+fw.data_off,dmem_dma));
 #else
   UINT64 last_source=((UINT64)registers[(GSP+0x110)/4]<<8)|((UINT64)registers[(GSP+0x128)/4]<<40);
   CHECK(last_source>=0xdf00);UINT8 *image=dma_pointer(last_source-0xdf00,0xe700);
@@ -157,8 +162,8 @@ static VOID check_booter_publication(void) {
   CHECK(le64(meta)==GU_WPR_META_MAGIC && le64(meta+8)==1);
   CHECK(le64(meta+24)==0x5053000 && le64(meta+80)==0xfa00);
   UINT64 delta=0;
-#ifdef GU_EXPERIMENTAL_3090
-  delta=0x380000000ULL;
+#ifdef GU_EXPERIMENTAL_UNLOCK
+  delta=PROFILE_FB_TOP-0x280000000ULL;
 #endif
   CHECK(le64(meta+112)==0x275400000ULL+delta && le64(meta+136)==0x27ada0000ULL+delta);
   CHECK(le64(meta+144)==0x27fdfa000ULL+delta && le64(meta+152)==0x27fe00000ULL+delta);
@@ -324,8 +329,8 @@ static EFI_STATUS EFIAPI write_memory(EFI_PCI_IO_PROTOCOL *p,EFI_PCI_IO_PROTOCOL
     fake.gsp_starts++;CHECK(fake.gsp_starts==1 && (config[4]&4));check_fwsec_image();
     if(fake.mode!=FWSEC_NO_WPR && fake.mode!=PIO_UNAVAILABLE_NO_WPR) {
       registers[0x1fa824/4]=0x27fe000;registers[0x1fa828/4]=0x27feff0;
-#ifdef GU_EXPERIMENTAL_3090
-      registers[0x1fa824/4]=0x5ffe000;registers[0x1fa828/4]=0x5ffeff0;
+#ifdef GU_EXPERIMENTAL_UNLOCK
+      registers[0x1fa824/4]=(UINT32)((PROFILE_FB_TOP-0x200000ULL)>>8);registers[0x1fa828/4]=registers[0x1fa824/4]+0xff0;
 #endif
     }
     if(fake.mode==FWSEC_ERROR_CODE)registers[0x1438/4]=0x10000;
@@ -391,12 +396,12 @@ static VOID setup(enum scenario mode) {
   *(UINT32 *)(config+0x68)=0x00807805;*(UINT32 *)(config+0x78)=0x0012b410;
   *(UINT32 *)(config+0x7c)=0x112c8de1;*(UINT32 *)(config+0x80)=0x00092930;
   *(UINT32 *)(config+0xc8)=0x00050011;
-  registers[0]=0xb72000a1;registers[0x118128/4]=0x8b8f;registers[0x118234/4]=0x03ff;
+  registers[0]=GU_CHIP_ID;registers[0x118128/4]=0x8b8f;registers[0x118234/4]=0x03ff;
   registers[GSP/4+0x100/4]=0x10;registers[0x1fa824/4]=0x1ffffe00;
   registers[PLM/4]=0xffffff8f;registers[SS0/4]=0x46254040;registers[SS1/4]=3;
   registers[0x1183a4/4]=0x2800;registers[0x625f04/4]=1;registers[0x1fa7c8/4]=0x45cb8f;
-#ifdef GU_EXPERIMENTAL_3090
-  registers[SS0/4]=GU_STOCK_PROFILE_SS0;registers[SS1/4]=6;registers[0x1183a4/4]=0x6000;
+#ifdef GU_EXPERIMENTAL_UNLOCK
+  registers[SS0/4]=GU_STOCK_PROFILE_SS0;registers[SS1/4]=6;registers[0x1183a4/4]=GU_DEVICE_MEMORY_SIZE;
 #endif
   registers[0x1fa82c/4]=0x100000;registers[0x1fa830/4]=0x26ffff0;
   registers[0x824148/4]=1;registers[0x8241e0/4]=3;
@@ -406,7 +411,7 @@ static VOID setup(enum scenario mode) {
   registers[(GSP+0x94)/4]=0x12345678;
   memcpy((UINT8 *)registers+0x300000,prom,sizeof(prom));
   GuInit(&bs,&pci);Gu.bar_base=0x84000000;Gu.bar_size=sizeof(registers);
-#ifdef GU_EXPERIMENTAL_3090
+#ifdef GU_EXPERIMENTAL_UNLOCK
   if(core_use_capture)memcpy(config,core_captured_config,sizeof(config));
   Gu.bar_base=GU_BAR0_BASE;
 #endif
@@ -504,7 +509,7 @@ int main(int argc,char **argv) {
       if(mode==DISPLAY_CHANGED)CHECK(fake.gsp_starts==1 && fake.sec2_starts==1 && !fake.flrs);
       if(mode==FWSEC_NO_WPR || mode==PIO_UNAVAILABLE_NO_WPR) {
         CHECK(fake.gsp_starts==1 && !fake.sec2_starts && !fake.flrs);
-#ifdef GU_EXPERIMENTAL_3090
+#ifdef GU_EXPERIMENTAL_UNLOCK
 #ifdef GU_ENTRY_LATCHED
         CHECK(registers[SS0/4]==test_entry_ss0 && registers[SS1/4]==test_entry_ss1);
 #else

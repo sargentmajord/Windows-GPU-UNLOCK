@@ -8,6 +8,6 @@ try {
  New-Item -ItemType Directory -Path build -Force | Out-Null
  & $Clang -std=c11 -O1 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I ../../deps/edk2/MdePkg/Include -I ../../deps/edk2/MdePkg/Include/X64 test_handoff.c flow.c ../unlock/sha256.c -o build/test-handoff.exe
  if($LASTEXITCODE -ne 0){throw 'Handoff test compile failed'}
- & ./build/test-handoff.exe ../unlock/build/experimental/entryLatchedSs1Full/internal/RTX3090-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI
+ & ./build/test-handoff.exe ../unlock/build/experimental/entryLatchedSs1Full/internal/RTX3060-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL.EFI
  if($LASTEXITCODE -ne 0){throw 'Handoff tests failed'}
 } finally {Pop-Location}

@@ -221,12 +221,18 @@ static EFI_STATUS FullConsumers(const GRAPH *g) {
   }
   return Full.EdidAgent!=Full.NvAgent && Full.EdidAgent!=Full.Image?EFI_SUCCESS:EFI_ACCESS_DENIED;
 #else
-  UINTN edid=0,nv=0,nvChild=0,amdEdid=0;
+  UINTN edid=0,nv=0,nvChild=0,otherEdid=0;
   for(UINTN i=0;i<g->Count;i++) {
     const EDGE *e=&g->Edges[i];
     if(e->Handle==PreparedPlan.Rtx) {
+#if GU_NO_EDID_DRIVER
+      /* This firmware binds no EDID driver: after the console drivers were detached,
+       * no active driver may still hold the target's display handle. */
+      return EFI_ACCESS_DENIED;
+#else
       if(!GuGuidEqual(&e->Protocol,&EdidGuid) || e->Attributes!=EFI_OPEN_PROTOCOL_BY_DRIVER || e->Controller!=PreparedPlan.Rtx || e->Count!=1)return EFI_ACCESS_DENIED;
       Full.EdidAgent=e->Agent;edid++;
+#endif
     }
     if(e->Handle==PreparedPlan.RtxPci) {
       if(e->Count!=1)return EFI_ACCESS_DENIED;
@@ -235,16 +241,20 @@ static EFI_STATUS FullConsumers(const GRAPH *g) {
       else return EFI_ACCESS_DENIED;
     }
   }
+#if GU_NO_EDID_DRIVER
+  if(edid!=0 || nv!=1 || nvChild!=1 || Full.NvAgent==Full.Image)return EFI_ACCESS_DENIED;
+#else
   if(edid!=1 || nv!=1 || nvChild!=1 || Full.EdidAgent==Full.NvAgent || Full.EdidAgent==Full.Image || Full.NvAgent==Full.Image)return EFI_ACCESS_DENIED;
+#endif
   for(UINTN i=0;i<g->Count;i++) {
     const EDGE *e=&g->Edges[i];
     if(e->Handle==PreparedPlan.RtxPci && e->Agent!=Full.NvAgent)return EFI_ACCESS_DENIED;
-    if(e->Handle==PreparedPlan.Amd && GuGuidEqual(&e->Protocol,&EdidGuid)) {
-      if(e->Agent!=Full.EdidAgent || e->Attributes!=EFI_OPEN_PROTOCOL_BY_DRIVER || e->Controller!=PreparedPlan.Amd || e->Count!=1)return EFI_ACCESS_DENIED;
-      amdEdid++;
+    if(e->Handle==PreparedPlan.Other && GuGuidEqual(&e->Protocol,&EdidGuid)) {
+      if(e->Agent!=Full.EdidAgent || e->Attributes!=EFI_OPEN_PROTOCOL_BY_DRIVER || e->Controller!=PreparedPlan.Other || e->Count!=1)return EFI_ACCESS_DENIED;
+      otherEdid++;
     }
   }
-  return amdEdid==1?EFI_SUCCESS:EFI_ACCESS_DENIED;
+  return otherEdid==(GU_NO_EDID_DRIVER?0U:1U)?EFI_SUCCESS:EFI_ACCESS_DENIED;
 #endif
 }
 #if defined(GU_HEADLESS_RESEARCH) && GU_CONSOLE_AGGREGATE
@@ -303,7 +313,7 @@ static BOOLEAN FullExpected(const GRAPH *g,UINTN stage) {
   return g->Count==wanted+own;
 #endif
 }
-static EFI_STATUS AmdOnly(VOID) {
+static EFI_STATUS OtherOnly(VOID) {
 #ifdef GU_HEADLESS_RESEARCH
   EFI_SYSTEM_TABLE *t=Full.Table;PLAN *p=&PreparedPlan;EFI_BOOT_SERVICES *bs=t->BootServices;
   if(!t->ConIn || (UINTN)t->ConIn->Reset!=p->KeyReset || (UINTN)t->ConIn->ReadKeyStroke!=p->KeyRead || t->ConIn->WaitForKey!=p->KeyWait)return EFI_NOT_READY;
@@ -344,9 +354,9 @@ static EFI_STATUS AmdOnly(VOID) {
   EFI_STATUS s=Interface(bs,p->Console,&TextGuid,&out);
   if(s==EFI_SUCCESS)s=Interface(bs,p->Error,&TextGuid,&err);
   if(s==EFI_SUCCESS)s=Interface(bs,p->Input,&InputGuid,&in);
-  if(s==EFI_SUCCESS)s=Interface(bs,p->Amd,&TextGuid,&text);
-  if(s!=EFI_SUCCESS || out!=p->ConsoleText || err!=p->ErrorText || in!=p->Keys || text!=p->AmdText)return EFI_NOT_READY;
-  EFI_HANDLE *handles=NULL;UINTN count=0,amd=0;
+  if(s==EFI_SUCCESS)s=Interface(bs,p->Other,&TextGuid,&text);
+  if(s!=EFI_SUCCESS || out!=p->ConsoleText || err!=p->ErrorText || in!=p->Keys || text!=p->OtherText)return EFI_NOT_READY;
+  EFI_HANDLE *handles=NULL;UINTN count=0,other=0;
   s=bs->LocateHandleBuffer(ByProtocol,&GopGuid,NULL,&count,&handles);
   if(s==EFI_SUCCESS && (!handles || !count || count>2))s=EFI_UNSUPPORTED;
   for(UINTN i=0;s==EFI_SUCCESS && i<count;i++) {
@@ -355,18 +365,18 @@ static EFI_STATUS AmdOnly(VOID) {
     EFI_STATUS ps=Interface(bs,handles[i],&PathGuid,(VOID **)&path);
     EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *m=gop->Mode;
     if((ps==EFI_UNSUPPORTED || ps==EFI_NOT_FOUND) && !path && handles[i]==p->Console && !m->FrameBufferBase && !m->FrameBufferSize)continue;
-    if(ps!=EFI_SUCCESS || handles[i]!=p->Amd || !PathMatches(path,p->AmdDisplayPath) || ++amd!=1 || !m->Info || m->SizeOfInfo<sizeof(*m->Info) ||
+    if(ps!=EFI_SUCCESS || handles[i]!=p->Other || !PathMatches(path,p->OtherDisplayPath) || ++other!=1 || !m->Info || m->SizeOfInfo<sizeof(*m->Info) ||
        !m->FrameBufferBase || !m->FrameBufferSize || m->Mode>=m->MaxMode || m->Info->PixelFormat>PixelBlueGreenRedReserved8BitPerColor ||
        !m->Info->HorizontalResolution || !m->Info->VerticalResolution || m->Info->PixelsPerScanLine<m->Info->HorizontalResolution ||
        (UINT64)m->Info->PixelsPerScanLine*m->Info->VerticalResolution>m->FrameBufferSize/4){s=EFI_UNSUPPORTED;break;}
   }
   if(handles && bs->FreePool(handles)!=EFI_SUCCESS)s=EFI_DEVICE_ERROR;
   UINT32 cfg[16];EFI_PCI_IO_PROTOCOL *io=NULL;
-  if(s==EFI_SUCCESS)s=Interface(bs,p->AmdPci,&PciGuid,(VOID **)&io);
-  if(s==EFI_SUCCESS && io!=p->AmdIo)s=EFI_NOT_READY;
+  if(s==EFI_SUCCESS)s=Interface(bs,p->OtherPci,&PciGuid,(VOID **)&io);
+  if(s==EFI_SUCCESS && io!=p->OtherIo)s=EFI_NOT_READY;
   if(s==EFI_SUCCESS)s=io->Pci.Read(io,EfiPciIoWidthUint32,0,16,cfg);
-  if(s==EFI_SUCCESS && !Bytes(cfg,p->AmdConfig,sizeof(cfg)))s=EFI_NOT_READY;
-  return s==EFI_SUCCESS && amd!=1?EFI_UNSUPPORTED:s;
+  if(s==EFI_SUCCESS && !Bytes(cfg,p->OtherConfig,sizeof(cfg)))s=EFI_NOT_READY;
+  return s==EFI_SUCCESS && other!=1?EFI_UNSUPPORTED:s;
 #endif
 }
 static EFI_STATUS CapturePermit(VOID) {
@@ -414,7 +424,7 @@ static EFI_STATUS RestoreDecode(VOID) {
   /* Durable logging can run firmware callbacks: recheck the exact target,
    * delta and cache under the held exclusive claim before the only write. */
   old=bs->RaiseTPL(TPL_NOTIFY);
-  if(s==EFI_SUCCESS)s=AmdOnly();
+  if(s==EFI_SUCCESS)s=OtherOnly();
   if(s==EFI_SUCCESS)s=ReadConfigFull(cfg);
   UINT64 rechecked=0;
   if(s==EFI_SUCCESS && (!GuDecodeRestoreMask(Full.Config,cfg,&rechecked) || rechecked!=needed))s=EFI_NOT_READY;
@@ -453,11 +463,15 @@ EFI_STATUS GuReleaseGop(EFI_SYSTEM_TABLE *t,EFI_HANDLE image,GU_PREPARE_LOG log,
 #ifdef GU_HEADLESS_RESEARCH
   s=Note("headless-display-child-consumers-preflight",s);
 #endif
+#if GU_NO_EDID_DRIVER
+  if(s==EFI_SUCCESS)s=Note("no-edid-driver-on-this-firmware",EFI_SUCCESS);
+#else
   if(s==EFI_SUCCESS)s=Note("ami-runtime-code-profile",Profile(Full.EdidAgent,TRUE));
+#endif
   if(s==EFI_SUCCESS)s=Note("nvidia-code-profile",Profile(Full.NvAgent,FALSE));
   if(s==EFI_SUCCESS)s=CapturePermit();
   s=Note("full-release-preflight",s);if(s!=EFI_SUCCESS)return s;
-  for(UINTN stage=3;stage<=4;stage++) {
+  for(UINTN stage=GU_NO_EDID_DRIVER?4U:3U;stage<=4;stage++) {
 #ifdef GU_HEADLESS_RESEARCH
     UINTN repeats=stage==3?Full.ChildCount:1;
     for(UINTN child=0;child<repeats;child++) {
@@ -491,7 +505,7 @@ EFI_STATUS GuReleaseGop(EFI_SYSTEM_TABLE *t,EFI_HANDLE image,GU_PREPARE_LOG log,
 #endif
     s=Note(stage==3?"detach-edid-return":"detach-nvidia-return",s);if(s!=EFI_SUCCESS)return s;
     if(stage==3)s=Alive(t,&PreparedPlan);
-    else {Full.Released=TRUE;s=AmdOnly();}
+    else {Full.Released=TRUE;s=OtherOnly();}
     if(s==EFI_SUCCESS)s=Snapshot(bs,&g);
     if(s==EFI_SUCCESS && !FullExpected(&g,stage))s=EFI_NOT_READY;
     s=Note(stage==3?"edid-detach-verified":"nvidia-detach-verified",s);if(s!=EFI_SUCCESS)return s;
@@ -529,9 +543,9 @@ EFI_STATUS GuVerifyReleased(EFI_SYSTEM_TABLE *t,BOOLEAN checkCold) {
   EFI_STATUS s;
 #define VERIFY_STEP(label,expr) do {VerifyDiagnostic.Stage=(label);s=(expr);VerifyDiagnostic.Status=s;if(s!=EFI_SUCCESS)return s;} while(0)
 #ifdef GU_HEADLESS_RESEARCH
-  VERIFY_STEP("verify-zero-physical-gop-input",AmdOnly());
+  VERIFY_STEP("verify-zero-physical-gop-input",OtherOnly());
 #else
-  VERIFY_STEP("verify-amd-display-input",AmdOnly());
+  VERIFY_STEP("verify-other-display-input",OtherOnly());
 #endif
   VERIFY_STEP("verify-pci-read",ReadConfigFull(cfg));
   for(UINTN i=0;i<64;i++)if(!VerifyConfigWord(i,Full.Config[i],cfg[i],checkCold)) {

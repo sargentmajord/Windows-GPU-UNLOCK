@@ -1,4 +1,4 @@
-/* GPL-2.0-only. Read-only GA10x capture for the 3070 Ti headless port.
+/* GPL-2.0-only. Read-only GA10x capture for the RTX 3060 port on this machine.
  * PCI config reads, BAR0 Mem.Read, PROM hash, loaded-image dumps only. */
 #include <Uefi.h>
 #include <Protocol/PciIo.h>
@@ -25,8 +25,8 @@ static EFI_GUID GopGuidL=EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 static EFI_GUID SfsGuidL=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 static EFI_SYSTEM_TABLE *SysT;
 static UINTN DumpIndex;
-static CHAR16 DirName[]=L"RTX3090-UNLOCK";
-static CHAR16 ImgPrefix[]=L"\\RTX3090-UNLOCK\\IMG";
+static CHAR16 DirName[]=L"RTX3060-UNLOCK";
+static CHAR16 ImgPrefix[]=L"\\RTX3060-UNLOCK\\IMG";
 
 static VOID PH(CAPTURE *c,const char *s,UINT64 v){Text(c,s);Hex(c,v,16);End(c);}
 
@@ -83,7 +83,7 @@ static VOID ProbeCaps(CAPTURE *c,EFI_PCI_IO_PROTOCOL *io) {
   }
 }
 
-static VOID ProbeBar(CAPTURE *c,EFI_PCI_IO_PROTOCOL *io,UINT32 bar) {
+static VOID ProbeBar(CAPTURE *c,EFI_PCI_IO_PROTOCOL *io,UINT32 bar,EFI_FILE_PROTOCOL *root) {
   static const UINT32 offs[]={
     0x000000,0x108154,0x108170,0x108180,0x108354,
     0x118128,0x118234,0x110100,0x1183a4,0x1fa828,
@@ -104,6 +104,18 @@ static VOID ProbeBar(CAPTURE *c,EFI_PCI_IO_PROTOCOL *io,UINT32 bar) {
     if(s==EFI_SUCCESS) {
       GuSha256(page,0x100000,digest);
       Text(c,"prom sha256=");for(UINTN i=0;i<32;i++)Hex(c,digest[i],2);End(c);
+      /* Keep the exact bytes next to the log so host tests can replay them. Local use only:
+       * this is the card's video BIOS image and must never be published. */
+      if(root) {
+        EFI_FILE_PROTOCOL *pf=NULL;
+        static CHAR16 PromName[]=L"\\RTX3060-UNLOCK\\PROM.BIN";
+        EFI_STATUS fs=root->Open(root,&pf,PromName,EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
+        if(fs==EFI_SUCCESS && pf) {
+          UINTN n=0x100000;fs=pf->Write(pf,&n,page);
+          if(fs!=EFI_SUCCESS || n!=0x100000)Problem(c,"prom-file-write",fs==EFI_SUCCESS?EFI_END_OF_FILE:fs);
+          pf->Close(pf);
+        } else Problem(c,"prom-file-open",fs);
+      }
     } else { Problem(c,"prom-read",s); }
     c->Table->BootServices->FreePool(page);
   } else Problem(c,"prom-alloc",s==EFI_SUCCESS?EFI_OUT_OF_RESOURCES:s);
@@ -181,7 +193,7 @@ EFI_STATUS GuProbeGpu(EFI_SYSTEM_TABLE *t,CAPTURE *c) {
     UINT32 sub=0;io->Pci.Read(io,EfiPciIoWidthUint32,0x2c,1,&sub);PH(c,"subsystem=0x",sub);
     ProbeCaps(c,io);
     UINT32 bar=cfg[0x10/4]&~0xfU;
-    if(bar)ProbeBar(c,io,bar);else Problem(c,"bar0",EFI_UNSUPPORTED);
+    if(bar)ProbeBar(c,io,bar,root);else Problem(c,"bar0",EFI_UNSUPPORTED);
   }
   if(hs)bs->FreePool(hs);
   Text(c,"probe targets=");Hex(c,found,4);End(c);

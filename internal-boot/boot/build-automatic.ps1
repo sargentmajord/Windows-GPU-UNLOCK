@@ -2,7 +2,7 @@ param([string]$Clang='clang',[string]$LldLink='lld-link')
 $ErrorActionPreference='Stop'
 Push-Location $PSScriptRoot
 try {
- $child='../unlock/build/experimental/entryLatchedSs1Full/internal/automatic/RTX3090-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL-AUTO.EFI'
+ $child='../unlock/build/experimental/entryLatchedSs1Full/internal/automatic/RTX3060-EXPERIMENTAL-entryLatchedSs1Full-INTERNAL-AUTO.EFI'
  $m=Get-Content ../unlock/build/experimental/entryLatchedSs1Full/internal/automatic/build-manifest.json -Raw | ConvertFrom-Json
  $hash=(Get-FileHash -LiteralPath $child).Hash
  if($m.Mode -ne 'automatic-internal-exact-card-unlock' -or $m.EfiSha256 -ne $hash -or $m.StockProfile -ne 'entryLatchedSs1Full'){throw 'Automatic child contract mismatch'}

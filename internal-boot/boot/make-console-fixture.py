@@ -34,11 +34,26 @@ def one(predicate):
     if len(values) != 1:
         raise ValueError('Expected exactly one role')
     return indices[values[0]]
+def option(name, default=None):
+    """--name VALUE from argv; the defaults are this machine's values."""
+    argv = sys.argv[2:]
+    return argv[argv.index(name) + 1] if name in argv else default
+no_edid = '--with-edid' not in sys.argv[2:]   # this firmware binds no EDID/mouse driver
+rtx_id = option('--rtx-id', '254410de')        # RTX 3060: PCI dword 0 (device<<16|vendor), hex
+other_id = option('--other-id', '2f0410de')    # RTX 5070 (console adapter): PCI dword 0, hex
+# The two GOP handles are picked by the PCI node of their device path:
+# Pci(dev1,fn0) = RTX 3060, Pci(dev1,fn1) = RTX 5070.
+rtx_path_node = option('--rtx-path-node', '010106000001')
+other_path_node = option('--other-path-node', '010106000101')
+def gop_by(node, framebuffer):
+    if node:
+        return lambda b: 'protocol guid=9042a9de-23dc-4a38-96fb-7aded080516a' in b and f'path-node raw={node}' in b
+    return lambda b: f'gop framebuffer={framebuffer}' in b
 roles = {
-    'RtxPci': one(lambda b: 'pci config-dwords=220410de' in b),
-    'AmdPci': one(lambda b: 'pci config-dwords=164e1002' in b),
-    'Rtx': one(lambda b: 'gop framebuffer=0x000000fcc0000000' in b),
-    'Amd': 0 if single else one(lambda b: 'gop framebuffer=0x000000fce0000000' in b),
+    'RtxPci': one(lambda b: f'pci config-dwords={rtx_id}' in b),
+    'OtherPci': one(lambda b: f'pci config-dwords={other_id}' in b),
+    'Rtx': one(gop_by(rtx_path_node, '0x000000fcc0000000')),
+    'Other': 0 if single else one(gop_by(other_path_node, '0x000000fce0000000')),
 }
 if single:
     child_records = [e for e in edges if e[0] == roles['RtxPci'] and str(e[3]) == '09576e91-6d3f-11d2-8e39-00a0c969723b' and e[4] == 8 and e[2] != roles['Rtx']]
@@ -51,6 +66,8 @@ for role, protocol, controller in [
     ('NvAgent', '4cf5b200-68b8-4ca5-9eec-b23e3f50029a', roles['RtxPci']),
     ('EdidAgent', '1c0c34f6-d380-41fa-a049-8ad06c1a66aa', roles['Rtx']),
 ]:
+    if no_edid and role == 'EdidAgent':
+        continue   # this firmware has no EDID/mouse driver bound to the display handles
     records = [e for e in edges if e[0] == controller and str(e[3]) == protocol and e[4] == 16]
     if len(records) != 1:
         raise ValueError('Expected a unique consumer')
@@ -69,7 +86,7 @@ for h, a, c, g, attrs, count in edges:
     guid = f'{{0x{g.time_low:x},0x{g.time_mid:x},0x{g.time_hi_version:x},{{' + ','.join(f'0x{x:x}' for x in data[8:]) + '}}'
     lines.append(f'{{(EFI_HANDLE){h},(EFI_HANDLE){a},(EFI_HANDLE){c},{guid},{attrs},{count}}},')
 lines.append('};')
-for role in ['Rtx', 'Amd']:
+for role in ['Rtx', 'Other']:
     block = blocks[next(h for h, i in indices.items() if i == roles[role + 'Pci'])]
     cfg = re.search(r'pci config-dwords=([^\n]+)', block)[1].split()
     if len(cfg) != 16:

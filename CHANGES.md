@@ -1,5 +1,120 @@
 # Changes
 
+## 2026-10-25 - automatic mode verified once on the reference machine
+
+- AUTO.EFI + UNLOCK-AUTO.EFI (with the issue-42 hardening, Esc windows kept, no keypress) ran from a one-time boot: release, one unlock (transaction result 0, selectors 0x88888888 / 0x8, FLR completed), Windows started. Benchmark afterwards: FP16 48.61, BF16 50.17, FP32 8.21 TFLOPS (4096 matrix multiply, median of 3); no Windows GPU or hardware-error events.
+- Not yet verified: more than one automatic boot, a normal Windows restart with automatic mode permanent, Fast Startup off, the no-wait private build.
+- The manual pair on the boot partition was refreshed to the hardened build; the pair that ran on hardware earlier is kept under EFI\WindowsGPUUnlock\previous.
+
+## 2026-10-25 - pruning to what is needed (credit, build, tests, documents we use)
+
+- Removed after checking that nothing used them: the duplicate root efi_runtime.c; the original author's headless research scripts (research/), headless installer and its tests (internal-boot/Headless.ps1, install/headless-package.ps1 and tests; Configure.ps1 now holds the one identity value it needed); the unrunnable v0.6 write-sequence comparison harness (tests/check_fwsec_sequence.py, test_fwsec_trace.c, tests/reference/); the original author's guides and records for his own machines (GUIDE, HEADLESS, INTERNAL-BOOT, docs/original-author/) and all Korean translations (they stay in the upstream repository).
+- THIRD_PARTY_NOTICES.md is now an English notice that names every upstream project and contributor and what this fork changed; the original Korean notice is kept as THIRD_PARTY_NOTICES.ko.md.
+- Kept on purpose: LICENSE, LICENSES/, the notices, the vendored upstream source files with their headers, the benchmark's upstream source and licence, the EDK2 headers, and the C-level headless code that shared sources still contain (blocked for this profile).
+- After the pruning: all host tests pass and the boot images rebuild to the same hashes as the ones on the boot partition.
+
+## 2026-10-25 - final regression check
+
+- Removed this machine's absolute paths (and stale, non-existent capture folder names) from tracked scripts: the capture/PROM arguments of test-all.ps1, test-console.ps1 and research/headless/test-full.ps1 are now required parameters, and the build manifest no longer records a local path. The optional patch's context line was kept identical.
+- Checked: history has no firmware, video BIOS or capture files from this work; no secrets; no scheduled task or run-key was added; Windows boot order, Fast Startup, Secure Boot and BitLocker are as before; the Rocky repositories are untouched by this work.
+- The automatic pair on the boot partition was rebuilt and restaged to include the issue-42 hardening (AUTO.EFI 8C43211B8674, UNLOCK-AUTO.EFI C1E4103D493D); the previous pair is kept under EFI\WindowsGPUUnlock\previous. The manual FULL.EFI/UNLOCK.EFI that ran on hardware twice are unchanged.
+
+## 2026-10-25 - firmware-boot assessment rejects register-error values (upstream issue 42)
+
+- internal-boot/unlock/vendor/gfw_eval.c: values in the 0xbadfxxxx register-error family no longer count as a finished firmware boot (the old check only rejected 0xffffffff). New tests/test_gfw_eval.c (also in test-all.ps1) covers it; against the old code the new test fails 4 checks. Healthy cold values (this machine: 0x8b8f / 0x3ff / 0x10) are unaffected.
+- The boot images staged on the reference machine's boot partition were built before this change (commit fb5b5c5); the next build, which will be run on hardware again, includes it.
+
+## 2026-10-25 - second consistency check of this copy
+
+- The top-level README and several guides still presented the original author's RTX 3090 / ASUS system as this project's result. The old README now lives in docs/original-author/ (with a banner), the old guides carry a 'not for this machine' banner, and the new README states what was and was not verified here. Links repaired.
+- internal-boot/Build.ps1 builds both pairs again (opt-out switch -ManualOnly); an earlier edit had made it manual-only while Install.ps1 needs both.
+- docs/PROFILE-Z790-3060.en.md, docs/AUDIT-2026-10-25.md and docs/UNIVERSAL-INSTALLER-PLAN.md brought up to date (plan: 15 requirements, edit damage repaired, rollback wording, Secure Boot note).
+- Re-verified: all host tests, and the six boot images rebuild to the same hashes as the staged ones (CONSOLE.EFI differs only by its clearer on-screen message).
+
+## 2026-10-25 - optional patch: no cancel windows (automatic mode)
+
+- patches/no-cancel-windows.patch, patches/Apply-NoCancelWindows.ps1, patches/README-no-cancel-windows.md: a standalone, opt-in patch that adds a `-NoEscWindows` build option removing the 5 s and 3 s Esc windows from the automatic boot. All hardware checks stay. The script shows a disclaimer, requires typing `I ACCEPT`, applies the patch, builds the private pair into `automatic-noesc` folders, installs nothing, and has `-Undo`. The default build is unchanged (byte-identical AUTO.EFI before and after).
+
+## 2026-10-25 - first hardware result on the reference machine (RTX 3060 12 GB, MSI MEG Z790 GODLIKE, RTX 5070 as console adapter)
+
+- Ladder run in order: read-only diagnostic, console-detach test, release-only test, then the manual unlock (FULL.EFI + UNLOCK.EFI, one U press). Unlock transaction result 0, selectors 0x88888888 / 0x8, FLR completed, Windows started without a reset.
+- Matrix-multiply benchmark (4096, median of three): FP16 26.51 -> 48.13 TFLOPS (+81.6%), BF16 26.40 -> 50.34 (+90.7%), FP32 unchanged (8.20 -> 8.18). A 5-minute sustained run (43 runs) stayed within 47.1-48.1 (FP16) and 49.2-49.7 (BF16) with a peak of 68 C; no Windows GPU or WHEA errors logged.
+- Not yet verified: repeating the unlock on a second boot, behavior after a normal restart or sleep (the unlock is re-applied every boot by design).
+
+## 2026-10-25 - release-only test image (RELEASE.EFI)
+
+- internal-boot/boot/handoff.c, build-release.ps1, unlock/machine-profile.h: new `GU_RELEASE_ONLY` build (with `GU_FULL_UNLOCK`). It runs the full driver release and verification and then starts Windows. It does not load or contain the unlock application and writes nothing to the card (the only register-level change is restoring the original PCI decode bits). The compile guard still refuses every other write-capable build, and refuses the release-only flag combined with any unlock mode.
+- Console-detach message now names the RTX 3060.
+
+## 2026-10-25 - benchmark made card-agnostic for the RTX 3060
+
+- benchmark/: the compute benchmark now selects the RTX 3060 (bus 1) instead of a 3090; the runner no longer requires exactly one NVIDIA GPU (the console adapter is ignored) and the build uses VS2022 build tools. The 3070 Ti variant was removed. CUDA 12.6 components are downloaded hash-verified into benchmark/packages (git-ignored).
+
+## 2026-10-25 - the unlock program's own host tests now run against this machine's real data
+
+- tests/test_checks.c, test_preflight.c, test_efi_transaction.c, test_experimental.c, test_sha256.c: stale values from the original author's machines replaced by the profile (console adapter path, bus and BAR end, 12 GB layout, this card's FWSEC image size 0xed00 and DMEM 0x980 loaded as 0xa00). New tools/make_capture_report.py converts a diagnostic capture into the report these tests read.
+- Result with the real PROM, PCI config and firmware files: all five suites pass (46 + 244 + 17 + 112 scenarios + the entry-latched integration). Write-enabled firmware builds stay blocked at compile time.
+
+## 2026-10-25 — real video BIOS replay on the reference machine
+
+- Diagnostic (probe.c) saves the 1 MiB PROM window next to its log; test_full.c passes 9,032 checks with the real PROM, config, handle graph and nvgop image;
+  new tests/test_real_prom.c parses a captured PROM with the project's FWSEC parser and checks the DMEM alignment rule (this card: DMEM 0x980 -> 0xa00).
+
+## 2026-10-25 — fix for RTX 3060 10de:2544 (non-LHR GA106) FWSEC DMEM alignment, from upstream pull request #115
+
+- internal-boot/unlock/vendor/unlock_610.c, `unlock_transaction_fwsec()`: this card's FWSEC image has a DMEM size of 0x980, which
+  is not a multiple of 256. Falcon DMA moves 256-byte blocks, so the unmodified code rejected the load with -EINVAL after the
+  firmware-started barrier was set, which upstream reports leaves the card stuck until a power cycle. The fix (written upstream by
+  lerpongn in Zagitta/gpu-unlock pull request #115, not yet merged there) rounds the DMEM transfer up to 256 bytes, zero-pads and
+  enlarges the buffer when needed, and validates the IMEM/DMEM DMA geometry before bus mastering and before the started barrier, so an
+  unloadable layout fails cleanly. Adapted to this tree: the validation sits before the entry-selector check, and sizes are logged with
+  %#x. The fwsec buffer size recorded for freeing is now the allocated size.
+- New regression cases in internal-boot/unlock/tests/test_transaction.c (modes 10 and 11, synthetic fixture): an unaligned DMEM size must
+  start the firmware with the rounded size; a misaligned IMEM target must fail with -EINVAL before bus mastering or firmware start.
+  Control run: the same test fails (exit 1) against the unpatched code and passes (exit 0) with the fix.
+
+## 2026-10-25 — converted to a single-machine copy for the RTX 3060 / MSI MEG Z790 GODLIKE PC
+
+- machine-profile.h now holds only this machine (target RTX 3060 10de:2544, console adapter RTX 5070 10de:2f04, MSI firmware
+  console drivers, nvgop-ga1xx). The profiles of the original author's machines were removed from this copy.
+  Freestanding builds that can write to the card are blocked with a compile-time error until the release path is complete.
+- Renamed to this machine: GU_EXPERIMENTAL_3090 -> GU_EXPERIMENTAL_UNLOCK, folder/output names RTX3090-* -> RTX3060-*
+  (boot-partition log folder is now \RTX3060-UNLOCK), GU_AMD_* / Amd* identifiers -> GU_OTHER_GPU_* / Other*,
+  test files test_3090_preflight.c / test_3090_experimental.c / test_transaction_3080.c -> test_preflight.c /
+  test_experimental.c / test_transaction.c, build and installer scripts reduced to the single profile z790-3060,
+  messages that named an AMD display or an RTX 3090 now name the RTX 5070 / RTX 3060.
+- Not renamed on purpose: copyright and credit lines, THIRD_PARTY_NOTICES.md, the history in CHANGES.md, NVIDIA's firmware
+  file names (gsp_ga10x.bin, *_ga102.bin; the code opens them by name), the frozen v0.6 reference snapshot under
+  tests/reference, and the original author's own records (evidence/, release/, docs describing his machine).
+- Verification: console prepare test 291 checks pass against the captured graph of this machine; display-path test passes;
+  research analyzer tests pass; read-only diagnostic rebuilt and redeployed.
+
+## 2026-10-25 — diagnostic-only profile for RTX 3060 / MSI MEG Z790 GODLIKE (NOT hardware-verified)
+
+- Added `-DGU_PROFILE_Z790_3060_DIAG` to internal-boot/unlock/machine-profile.h and a
+  `z790-3060-diag` option to internal-boot/Configure.ps1,
+  internal-boot/boot/build-diagnostic.ps1 and the identity table in
+  internal-boot/install/headless-package.ps1. It defines only identity values read
+  from Windows (PCI 10de:2544 at 01:00.0, subsystem 1462:397d, BAR0 0x85000000,
+  board MS-7D85, BIOS 1.I0). Every other constant is deliberately undefined, and
+  any unlock build flag against this profile is a compile error.
+- Console-adapter parametrization (all profiles): the "other" display adapter that keeps the
+  console while the target RTX is released was hard-coded to the original machine's AMD iGPU
+  (bus 12, ID 1002:164e, subsystem 1043:8877, root port 00:08.1, ADR 0x80010300). It is now
+  read from `GU_OTHER_GPU_*` in machine-profile.h, with those AMD values as the default.
+  Changed: internal-boot/unlock/machine-profile.h, port.h (GU_AMD_ID/GU_AMD_SUBSYSTEM now alias
+  the profile values), checks.c (GuDisplayPath route 1), app.c (AmdGopParent bus) and
+  internal-boot/boot/prepare-console.c (AmdPath, PciFor). Verified with llvm-objdump that the
+  compiled code and data of port.c, checks.c, app.c and prepare-console.c are identical for
+  the default and the b660m-3070ti profiles. New host test
+  internal-boot/unlock/tests/test_other_gpu_path.c (44 cases) covers the z790-3060-diag profile,
+  where the console adapter is an RTX 5070 (10de:2f04, bus 2, root port 00:01.1, ADR 0x80010390).
+- Status: builds as a read-only diagnostic. It has NOT been booted on hardware yet.
+  No unlock path exists for this profile. Do not treat it as support for the RTX 3060.
+- Contributors: changes by Sargentmajord (with assistance from Claude, an AI coding
+  assistant). Upstream work: Zagitta/gpu-unlock, impacifist/Windows-GPU-UNLOCK and
+  its upstream rough2515-hub/rtx3080-unlock-public; see THIRD_PARTY_NOTICES.md.
+
 ## 2026-10-24 — v0.3.1 variable headless display-child discovery
 
 - Fixed preflight rejection when ASUS firmware exposes three RTX display

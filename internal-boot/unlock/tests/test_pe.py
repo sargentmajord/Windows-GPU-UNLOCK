@@ -6,8 +6,8 @@ import sys
 import tempfile
 
 root=pathlib.Path(__file__).resolve().parents[1]
-efi=pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else root/'build/RTX3090-PREFLIGHT.EFI'
-link_map=pathlib.Path(sys.argv[2]) if len(sys.argv)>2 else root/'build/RTX3090-PREFLIGHT.map'
+efi=pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else root/'build/RTX3060-PREFLIGHT.EFI'
+link_map=pathlib.Path(sys.argv[2]) if len(sys.argv)>2 else root/'build/RTX3060-PREFLIGHT.map'
 original=efi.read_bytes()
 pe=struct.unpack_from('<I',original,0x3c)[0]
 with tempfile.TemporaryDirectory(prefix='pe-negative-',dir=root/'build') as scratch:
