@@ -269,6 +269,38 @@ try {
  $end = Invoke-InstallerSession -Here $repo
  ExpectTrue 'accepting the update starts the build from the existing capture' ((Read-InstallerState).Contains('Update') -and (Read-InstallerState).Contains('Profile'))
  Remove-Item Function:\Invoke-Phase-diag-build, Function:\Test-CardsUnchanged, Function:\Get-BootSourceFingerprint, Function:\Invoke-Phase-build
+
+ # ---------- every-boot's own circuit breaker: detected, explained, and a confirmed repair ----------
+ $script:DataRoot = Join-Path $t 'data'; [void](New-Item -ItemType Directory $script:DataRoot -Force)
+ function Get-SysDataRoot { $script:DataRoot }
+ $armLog = Join-Path $script:DataRoot 'arm.log'
+ $armState = Join-Path $script:DataRoot 'arm-state.json'
+
+ ExpectTrue 'not every-boot mode: no check at all' ((Test-EveryBootStuck (NewState @{ Schedule = [ordered]@{ Mode = 'Off' } })) -eq $null)
+ ExpectTrue 'every-boot mode but no log yet (never run once): no check' ((Test-EveryBootStuck (NewState @{ Schedule = [ordered]@{ Mode = 'EveryBoot' } })) -eq $null)
+
+ Set-Content -LiteralPath $armLog -Value '2026-01-01T00:00:00 armed one unlock for the next boot (entry {x}, runs on record: 3)'
+ Expect 'every-boot mode, last line is a normal arm: not stuck' (Test-EveryBootStuck (NewState @{ Schedule = [ordered]@{ Mode = 'EveryBoot' } })) $false
+ $items = Get-InstallStatus (NewState @{ Schedule = [ordered]@{ Mode = 'EveryBoot' } })
+ $ebItem = $items | Where-Object { $_.Id -eq 'every-boot' }
+ ExpectTrue 'status lists every-boot as ok when queuing normally' ($ebItem.Ok -and ($ebItem.Repair -eq ''))
+
+ Set-Content -LiteralPath $armLog -Value '2026-01-01T00:00:00 not armed: the previously queued unlock left no report (it did not run or did not finish)'
+ Expect 'every-boot mode, last line is the stuck message: stuck' (Test-EveryBootStuck (NewState @{ Schedule = [ordered]@{ Mode = 'EveryBoot' } })) $true
+ $stateForRepair = NewState @{ Schedule = [ordered]@{ Mode = 'EveryBoot' } }
+ $items = Get-InstallStatus $stateForRepair
+ $ebItem = $items | Where-Object { $_.Id -eq 'every-boot' }
+ ExpectTrue 'status explains the stuck state and offers the rearm repair' ((-not $ebItem.Ok) -and ($ebItem.Repair -eq 'rearm') -and ($ebItem.Text -like '*left no report*') -and ($ebItem.Text -like '*not start queuing again on its own*'))
+
+ Set-Content -LiteralPath $armState -Value '{"Armed":true,"RunsWhenArmed":3}'
+ Set-Answers @('N')
+ $changed = Invoke-StatusRepairs $stateForRepair @($ebItem)
+ ExpectTrue 'declining the repair changes nothing and leaves the stuck file in place' ((-not $changed) -and (Test-Path -LiteralPath $armState))
+ Set-Answers @('Y')
+ $changed = Invoke-StatusRepairs $stateForRepair @($ebItem)
+ ExpectTrue 'confirming the repair clears the stuck state file and reports changed' ($changed -and -not (Test-Path -LiteralPath $armState) -and ((OutText) -like '*queue normally again*'))
+
+ Remove-Item Function:\Get-SysDataRoot
 }
 finally { Set-RepoRoot $repo; Remove-TestRoot $t }
 

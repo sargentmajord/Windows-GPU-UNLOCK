@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-10-26 - every-boot mode's circuit breaker is now visible and repairable
+
+- Found on the reference machine: when every-boot mode's startup task queues an unlock and that run leaves no
+  report (a real freeze, a power loss, or a deliberate test can all cause this), its circuit breaker correctly
+  stops queuing new ones - but until now nothing told the user that happened, and there was no way back except
+  deleting a file by hand in ProgramData. A real user hitting this for real (not testing) would just find every-boot
+  mode had silently stopped, with no explanation and no self-service fix.
+- The status screen now checks for this (only when every-boot mode is on), explains plainly what happened, and
+  offers a repair - same pattern as every other repair here: it asks first, and only clears the stopped state so
+  the startup task's own normal check does the rest starting at the next restart. Nothing is forced or restarted
+  by this repair itself.
+- Tests: 8 new checks (not flagged outside every-boot mode or before it has run once; detected from the circuit
+  breaker's own log line; shown with a repair offered; declining changes nothing; confirming clears the stuck file).
+  Installer total 1153 checks.
+
 ## 2026-10-26 - release checklist drafted; requirement 29's hardware drill repeated
 
 - `docs/RELEASE-CHECKLIST.en.md` added: the steps for requirement 17 (SHA256SUMS, a GitHub artifact

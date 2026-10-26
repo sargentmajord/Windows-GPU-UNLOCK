@@ -56,7 +56,21 @@ function Get-ExpectedFallbackHash($State) {
  if ($f) { [string]$f.Sha256 } else { $null }
 }
 
-# Returns a list of @{ Id; Ok; Text; Repair } where Repair is '', 'restage' or 'restart'.
+# Every-boot mode's own startup task (internal-boot\Set-UnlockSchedule.ps1 -Mode EveryBoot) has a circuit breaker:
+# if a queued unlock left no report (a real freeze, a power loss, or a deliberate test), it stops queuing new ones
+# and waits. That is the right call on its own, but until now nothing told the user it happened or offered a way
+# back - they would just notice "every boot" had quietly stopped, with no explanation. Read-only; the repair below
+# only clears the stuck flag after the user agrees, so the task's own normal check does the rest at the next start.
+function Test-EveryBootStuck($State) {
+ if (-not ($State.Contains('Schedule') -and $State.Schedule -and $State.Schedule.Mode -eq 'EveryBoot')) { return $null }
+ $log = Join-Path (Get-SysDataRoot) 'arm.log'
+ if (-not (Test-Path -LiteralPath $log)) { return $null }
+ $last = Get-Content -LiteralPath $log -Tail 1 -ErrorAction SilentlyContinue
+ if ($last -match 'not armed: the previously queued unlock left no report') { return $true }
+ return $false
+}
+
+# Returns a list of @{ Id; Ok; Text; Repair } where Repair is '', 'restage', 'restart' or 'rearm'.
 function Get-InstallStatus($State) {
  $items = New-Object System.Collections.ArrayList
  function Add-Item([string]$Id, [bool]$Ok, [string]$Text, [string]$Repair = '') { [void]$items.Add([pscustomobject]@{ Id = $Id; Ok = $Ok; Text = $Text; Repair = $Repair }) }
@@ -80,6 +94,12 @@ function Get-InstallStatus($State) {
   if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { Add-Item 'fallback' $false 'The fallback file EFI\BOOT\BOOTX64.EFI is missing from the boot partition, so the firmware has nothing to start.' 'restage' }
   elseif ($want -and (Get-SysFileHash $file) -ne $want) { Add-Item 'fallback' $false 'The fallback file EFI\BOOT\BOOTX64.EFI is not the program the installer put there (something replaced it).' 'restage' }
   else { Add-Item 'fallback' $true 'The fallback file is the one the installer put there.' }
+ }
+ $stuck = Test-EveryBootStuck $State
+ if ($stuck) {
+  Add-Item 'every-boot' $false 'A queued unlock left no report (a real freeze, a power loss, or a deliberate test can all cause this), so every-boot mode safely stopped queuing new ones and has been waiting since. It will not start queuing again on its own.' 'rearm'
+ } elseif ($stuck -eq $false) {
+  Add-Item 'every-boot' $true 'Every-boot mode is queuing normally.'
  }
  @($items)
 }
@@ -106,6 +126,16 @@ function Invoke-StatusRepairs($State, $Items, [switch]$DryRun) {
  if (@($Items | Where-Object { -not $_.Ok -and $_.Repair -eq 'restart' }).Count -and -not $DryRun) {
   Write-Plain 'To get the firmware to make its boot entry again, restart once.'
   [void](Request-Restart 'Windows GPU Unlock installer: the firmware needs to notice the boot partition again.')
+ }
+ foreach ($i in @($Items | Where-Object { -not $_.Ok -and $_.Repair -eq 'rearm' })) {
+  if ($DryRun) { Write-Plain 'DRY RUN: it would offer to clear the stopped every-boot state so it starts queuing again.'; break }
+  if (Ask-YesNo 'Clear this and let every-boot mode start queuing again from your next restart?') {
+   $stateFile = Join-Path (Get-SysDataRoot) 'arm-state.json'
+   if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile -Force }
+   Write-Plain 'Cleared. Every-boot mode will queue normally again starting with your next restart.'
+   $changed = $true
+  }
+  break
  }
  $changed
 }
