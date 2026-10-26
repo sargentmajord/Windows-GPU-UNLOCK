@@ -1,0 +1,79 @@
+name: Release
+
+# Builds the release archive from a clean checkout, publishes SHA256SUMS next to it,
+# and attests the archive so `gh attestation verify` can confirm it came from this
+# repository's own build. See docs/RELEASE-CHECKLIST.en.md for the full process this
+# automates, and what it does not cover (a checksum and an attestation are not code
+# signing).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build the release archive
+        shell: pwsh
+        run: |
+          $name = "Windows-GPU-UNLOCK-$($env:GITHUB_REF_NAME)"
+          $staging = "staging/$name"
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          # Only what a user receives: never captures, firmware, local config or private data.
+          $include = @(
+            'Install-GpuUnlock.cmd', 'Install-GpuUnlock.ps1',
+            'installer', 'internal-boot', 'tools', 'firmware-tools', 'benchmark', 'patches', 'docs',
+            'LICENSE', 'LICENSES', 'THIRD_PARTY_NOTICES.md', 'README.md', 'CHANGES.md'
+          )
+          foreach ($item in $include) {
+            if (Test-Path $item) { Copy-Item -Recurse -Force $item "$staging/$item" }
+          }
+          # Strip anything private that may exist locally even though it is gitignored.
+          Get-ChildItem -Recurse -Path $staging -Include 'platform-config.h','local-config.json','*.bin','*.BIN' -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          Remove-Item -Recurse -Force "$staging/internal-boot/deps" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$staging/*" -DestinationPath "$name.zip" -Force
+          Write-Output "ARCHIVE_NAME=$name.zip" >> $env:GITHUB_ENV
+
+      - name: Leak scan (owner's real name, email, personal paths)
+        shell: pwsh
+        run: |
+          $hits = Select-String -Path (Get-ChildItem -Recurse -File "staging").FullName `
+            -Pattern 'Darron','sargentmajord131333','Rocky' -ErrorAction SilentlyContinue
+          if ($hits) {
+            $hits | ForEach-Object { Write-Output $_ }
+            throw "Leak scan found a match above. Stopping before publishing."
+          }
+          Write-Output "Leak scan: clean."
+
+      - name: Publish SHA256SUMS
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash $env:ARCHIVE_NAME -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $($env:ARCHIVE_NAME)" | Out-File -Encoding utf8 SHA256SUMS
+
+      - name: Attest the archive
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.ARCHIVE_NAME }}
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ARCHIVE_NAME }}
+            SHA256SUMS
+          generate_release_notes: true

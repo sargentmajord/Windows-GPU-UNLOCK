@@ -33,6 +33,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   will not run with it off. See [docs/CHECKS.md](docs/CHECKS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - **Not included:** NVIDIA firmware, video BIOS images and drivers are never redistributed. Firmware files are generated locally
   ([docs/ASSETS.en.md](docs/ASSETS.en.md)).
+- **The scripts are not digitally signed.** Check the download first (`SHA256SUMS`, and `gh attestation verify` if you use the GitHub CLI — see
+  the release page). Windows may mark a downloaded zip and what you extract from it as coming from the internet and show a warning when you
+  open `Install-GpuUnlock.cmd`; read the scripts if you want to, then choose to run it. `Install-GpuUnlock.cmd` starts the installer with the
+  PowerShell execution policy bypassed for that one run only and changes no system setting. If you prefer, right-click the extracted `.ps1`
+  and `.cmd` files, open Properties and tick Unblock, or run `Unblock-File` on them. Only do that after you have checked the file and where
+  it came from. A checksum file and an attestation are not the same thing as code signing: they show the archive is the one this project
+  built, not that Windows trusts the publisher.
 
 ## Where things are
 
