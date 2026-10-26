@@ -31,6 +31,259 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   TFLOPS number, since actual workloads mix in memory-bound work the unlock doesn't touch; measured real local LLM prefill gained +3-8%, not
   +82%. Games, FP32 work and memory-bound work (including LLM token generation/decode) do not speed up at all.
 
+## Changelog
+
+Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
+tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
+
+### 2026-10-26 - reproduced locked-vs-unlocked a day later, and measured real local LLM inference
+
+Repeated the GEMM benchmark from the day before on the same machine and got consistent results. Specifically tested
+whether a plain Windows Restart (not a full power-off) resets the card - confirmed yes, both the locked and
+unlocked state verified independently rather than assumed (register readout, and the FP16/FP32 ratio matching each
+documented reference). New: measured how much of the raw tensor-math gain reaches actual local LLM inference on the
+same card - prompt processing (prefill) gained +3.2% on a ~7,600-token prompt and +7.6% on a ~31,000-token prompt;
+token generation (decode) showed no measurable change at any size tested, and why that gap is expected. See
+[PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md).
+
+### 2026-10-26 - a notification for the stuck circuit breaker, and a release-freshness check
+
+Every-boot mode now shows a Windows notification the moment its circuit breaker stops queuing (instead of only
+showing on the status screen), with three choices: Repair (clears it, queues normally again), Ignore (asks again
+next logon if still stuck), or "No, turn it off" (disables every-boot mode). The installer also now checks whether
+you're running the latest release and links straight to it if not - never blocks, never fails. Every release's
+GitHub page now gets a real changelog instead of a bare compare link.
+
+### 2026-10-26 - every-boot mode's circuit breaker is now visible and repairable
+
+Found on the reference machine: when every-boot mode's startup task queues an unlock and that run leaves no report
+(a real freeze, a power loss, or a deliberate test), its circuit breaker correctly stops queuing new ones - but
+nothing told the user that happened, and there was no way back except deleting a file by hand. The status screen
+now explains plainly what happened and offers a one-click repair.
+
+### 2026-10-26 - release checklist drafted; the hardware recovery drill repeated
+
+Added a release checklist (checksums, attestation, the unsigned-script note). Repeated the hardware recovery drill
+on the reference machine: a hanging test image was staged in place of the fallback boot file, the screen froze as
+expected, holding the power button and powering on gave a normal Windows start with no BIOS and no menu, and the
+circuit breaker correctly refused to queue anything further until cleared. Roll back then restored everything.
+
+### 2026-10-26 - status screen, update-in-place, and plain roll-back wording
+
+Roll back's text now plainly states what it never touches (Windows files, your data, BIOS settings, the card's
+stored firmware). A finished install now shows a full status screen on every run (Secure Boot, Fast Startup,
+BIOS/board, the boot partition, whether the fallback boot file is still the installer's own) with one-click repairs
+that always ask first. If the board or BIOS changes later, the installer notices, explains what changed, and offers
+to start fresh rather than silently continuing on stale assumptions. If the installer's own code is newer than what
+you have installed, it offers to update your existing install in place without re-asking the first-time questions.
+
+### 2026-10-26 - graphical front end
+
+`Install-GpuUnlock.cmd` now opens a graphical window by default (ships with Windows, no extra download) instead of
+only a text console - a step line, a progress bar, a coloured log, and plain Yes/No and multiple-choice buttons.
+The text version is still available (`-Console`) and used automatically if no desktop is available. Both front ends
+run the identical installer logic underneath.
+
+### 2026-10-26 - user guide, launcher arguments, clearer check text
+
+Added a plain-words guide to the installer covering everything it asks, in order, and what Roll back does and
+never does. A few check messages were made clearer about exactly what to fix and how.
+
+### 2026-10-26 - installer stage 8: the two optional extras
+
+Added two opt-in extras, offered only after the unlock is verified and showed a real improvement: no-keypress
+automatic mode (each boot unlocks itself with nothing to press) and, after that, no cancel-countdown windows either.
+Both require typing `I ACCEPT` after reading a plain-words explanation of what changes, the freeze-and-power-button
+recovery, and a disclaimer; declining or a failed check changes nothing and the previous working setup is put back
+automatically. A start-menu option turns either extra back off at any time.
+
+### 2026-10-25 - installer stage 7: Roll back, and resuming automatically after a restart
+
+Roll back reads a record of exactly what the installer did and undoes it, newest first, checking every file's
+identity before touching it (nothing is ever deleted on a guess). At a restart, the installer can optionally
+continue automatically when you log back in, picking up right where it left off instead of needing to be started by
+hand again.
+
+### 2026-10-25 - review fixes, and a protected data folder
+
+A few hardening fixes from a security review: the installer's own data folder is now locked down so only
+Administrators and SYSTEM can change it (refusing to run at all if it finds the folder has been tampered with), long
+install paths are refused before they become a problem, and a firmware download failure now says exactly which file
+to fetch and where it goes instead of just failing silently.
+
+### 2026-10-25 - installer stage 6: the "Unlock my GPU on next boot" shortcut and the every-boot opt-in
+
+Added a desktop shortcut that queues exactly one unlock on the next restart - nothing permanent, no BIOS or boot
+menu involved. Every-boot mode (every single restart re-applies the unlock automatically) is an explicit opt-in with
+a full warning, offered only once a real unlock has already been confirmed working.
+
+### 2026-10-25 - installer stage 5: first unlock, before/after benchmark, verdict
+
+The installer now runs the actual unlock for the first time, with a full plain-words explanation of what will
+happen and the freeze/power-button recovery beforehand. A before-and-after matrix-multiply benchmark is offered
+(strongly recommended, but skippable) and gives a plain verdict: clear improvement, small improvement, or no
+meaningful improvement (with a roll-back suggestion).
+
+### 2026-10-25 - installer stage 4: firmware files, build and tests on the user's own PC
+
+The installer now generates NVIDIA's firmware files locally (never redistributed - every download is hash-checked
+against NVIDIA's own published values), builds the actual boot programs against your specific hardware, and runs a
+full suite of tests against your real captured data before anything touches the boot partition. Any failure stops
+the installer and writes a report instead of continuing.
+
+### 2026-10-25 - installer stage 3: a profile generated from a read-only capture of your PC
+
+Per-machine values (card identity, console adapter, firmware driver fingerprints) now come from one profile file
+built automatically from a read-only diagnostic capture of your own PC, rather than being hard-coded for one
+reference machine. The capture tool refuses to generate a profile at all unless the card is confirmed untouched and
+every expected condition is met - with a plain reason when it refuses.
+
+### 2026-10-25 - installer stage 2: card and boot-partition choice, backups, a plan screen
+
+Added the pieces that let you choose which card to target and where the boot partition goes (an existing one, a
+new drive, or shrinking C: with sizes shown and a typed confirmation), with everything backed up first and a single
+plan screen that is confirmed once before anything happens.
+
+### 2026-10-25 - on-screen failure message now says to use the power button
+
+If a boot program ever gets stuck, the on-screen message was pointing at the wrong recovery step (an F11/F8 boot
+menu). It now correctly tells you to hold the power button until the PC turns off, then power back on.
+
+### 2026-10-25 - startup task looks up the boot entry itself, every single time
+
+The automatic re-queuing task no longer trusts a saved id for where to queue the unlock - it looks the entry up
+fresh at every single start and double-checks Fast Startup and Secure Boot are still as expected before queuing
+anything. If anything looks wrong, it logs why and queues nothing rather than guessing.
+
+### 2026-10-25 - recovery drill passed; installer stage 1
+
+First real test of the worst case: a program was deliberately made to hang during the one-time boot slot. The
+screen froze as expected; holding the power button and powering back on started Windows completely normally, no
+BIOS screen, no boot menu. This is also where installer stage 1 (the first screen, the administrator prompt, and
+the first read-only checks) was built - it changes nothing on your PC at this stage.
+
+### 2026-10-25 - boot order does not survive a cold boot; a one-time queue does
+
+Discovered that setting a permanent boot order change from Windows does not survive a real cold boot - the firmware
+quietly resets it back to Windows-first. A one-time queued boot (used ever since) does survive it. This is the
+actual mechanism every-boot mode depends on.
+
+### 2026-10-25 - automatic (no-keypress) mode verified once on the reference machine
+
+The no-keypress automatic version of the unlock ran successfully for the first time: release, unlock, Windows
+start, with a measured tensor-math improvement afterward and no errors logged.
+
+### 2026-10-25 - pruning to only what this fork actually uses
+
+Removed code, scripts and documents from the original upstream project that this fork doesn't use (other
+developers' machine-specific research tools, old translated guides, an unused comparison harness), after
+confirming nothing else depended on them.
+
+### 2026-10-25 - final regression check before the first real hardware attempt
+
+A full check before doing anything on real hardware: no machine-specific private paths left in tracked files, no
+secrets, nothing added to Windows startup yet, and Secure Boot/BitLocker/boot order all still exactly as they were
+before this project touched the PC.
+
+### 2026-10-25 - a firmware-check bug fixed (credit: upstream issue #42)
+
+Fixed a case where certain firmware error values could be mistaken for a successfully finished boot. Found and
+fixed before it ever ran on real hardware.
+
+### 2026-10-25 - second consistency check of this fork
+
+The README and guides still described the original author's different PC as if it were this project's result.
+Corrected throughout, with the original author's own material clearly separated out and labeled as not applicable
+to this machine.
+
+### 2026-10-25 - optional patch: no cancel-countdown windows
+
+Added a standalone, opt-in patch (separate from the main installer at this point in the project) that removes the
+few-second cancel windows from the fully automatic unlock, for anyone who wants it. Everything else about the
+hardware safety checks is unchanged; typing an explicit acceptance phrase is still required.
+
+### 2026-10-25 - first real hardware result (RTX 3060 12 GB, MSI MEG Z790 GODLIKE)
+
+The actual first unlock on real hardware: manual version, one keypress, successful transaction, Windows started
+normally with no reset needed. Matrix-multiply benchmark: FP16 tensor math +81.6%, BF16 +90.7%, FP32 (control, as
+expected) basically unchanged. A 5-minute sustained run held steady with no errors. Not yet verified at this point:
+a second boot, or what happens after a normal restart or sleep.
+
+### 2026-10-25 - a release-only test build, with no unlock code in it at all
+
+Added a build that does everything up to (but not including) the actual unlock - useful for testing the release and
+recovery machinery itself in complete isolation from the part that writes anything to the card.
+
+### 2026-10-25 - benchmark made to work with any supported card, not just one
+
+The matrix-multiply benchmark no longer assumes a specific card - it selects whichever card you choose by its PCI
+address and reports its real name, rather than assuming which GPU is being measured.
+
+### 2026-10-25 - the unlock program's own tests now run against this real PC's data
+
+The project's existing test suite (inherited from upstream) was still checking against a different, older
+reference machine's captured data. Updated to check against this PC's own real captured values instead, and all
+tests pass against the real data.
+
+### 2026-10-25 - a real video-BIOS replay confirms the firmware-reading logic end to end
+
+Captured this card's actual video BIOS data and replayed it through the project's own parsing logic as an automated
+test, confirming the logic correctly handles this exact card's real firmware layout, not just a synthetic example.
+
+### 2026-10-25 - a real hardware compatibility bug found and fixed (credit: upstream pull request #115)
+
+This specific RTX 3060 variant (`10de:2544`) has a firmware data size that the original unlock code didn't handle -
+it would have left the card stuck until a power cycle. Found before ever touching real hardware, fixed using a
+patch written upstream (not yet merged there at the time), and verified with a dedicated regression test that fails
+against the old code and passes with the fix.
+
+### 2026-10-25 - converted into a single-machine copy for this specific PC
+
+Up to this point the code still supported several different original machines. Simplified it down to support only
+this one reference PC (RTX 3060 target, RTX 5070 as the console display, this specific motherboard), removing the
+other configurations entirely from this copy to reduce complexity and risk.
+
+### 2026-10-25 - a read-only diagnostic profile added for this PC (not yet tested on hardware)
+
+Before ever allowing any actual unlock on this new PC, a diagnostic-only profile was added that can only read
+identity information - any attempt to compile an actual unlock build against it fails to even compile, by design,
+until there's been a real diagnostic run confirming it's safe to go further.
+
+### 2026-10-24 - a display-detection bug fixed on a different motherboard
+
+Fixed a case where a different firmware vendor exposed an unexpected number of display outputs, which had been
+incorrectly rejected as invalid. Verified working after the fix on that machine.
+
+### 2026-10-24 - a second machine verified (different motherboard and a different RTX card)
+
+The project's approach was proven to generalize beyond the very first machine: a second, different PC (different
+motherboard, a different RTX 30-series card, no second display GPU available) was set up from scratch and
+successfully unlocked, with a measured tensor-math improvement. Also added: a safe, read-only diagnostic mode for
+fingerprinting a brand new, unknown PC before ever attempting a real unlock on it.
+
+### 2026-10-24 - the very first working internal, no-keypress test
+
+The first time the fully automatic (no keypress) version worked end to end on real hardware: one successful
+transaction, Windows returned normally, and a benchmark confirmed the improvement. This is also where the project
+first added a real roll-back/recovery path and public documentation.
+
+### 2026-10-23 - an internal experimental build, kept separate from the original public release
+
+Started a separate development line for the automatic/no-keypress idea, kept fully apart from the original stable
+public release so nothing already working could be put at risk while this was being worked out.
+
+### 2026-10-23 - documentation made bilingual, and an early compatibility survey added
+
+Added full English documentation alongside the original Korean, and a way to record compatibility reports from
+different PCs without collecting anything private.
+
+### 2026-10-20 - the project's starting point: a public case study this fork builds on
+
+This is where this fork's history begins: based on an existing public release by another author, with the actual
+hardware-check logic (card identity, memory layout) adapted, a safe read-only mode added by default, and the
+project's own test suite built out alongside it from the very start. No proprietary files (firmware, drivers,
+private paths) have ever been included in any public release of this project, from this very first entry onward.
+
 ## Read this before trying anything
 
 - **No warranty.** This writes to GPU registers before Windows starts. It is unofficial, unsupported by NVIDIA and may void a warranty.
@@ -61,12 +314,6 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 | `internal-boot/` | the boot programs, build and staging scripts, host tests |
 | `patches/` | optional patches, including one that removes the automatic mode's Esc cancel windows (with disclaimer) |
 | `benchmark/` | the before/after benchmark |
-
-## Changes in this fork
-
-Fixed the RTX 3060 `10de:2544` firmware-load alignment bug (upstream [pull request #115](https://github.com/Zagitta/gpu-unlock/pull/115), applied
-here with regression tests), made the release path work on firmware without an EDID driver, replaced the author's machine profiles with one
-for the reference machine, and added tests, documentation and a benchmark for it. Full list: [CHANGES.md](CHANGES.md).
 
 ## License and attribution
 

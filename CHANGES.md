@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-26 - the full changelog now lives in the README too
+
+The README only had a two-entry preview linking out to this file. Readers land on the README first and shouldn't
+have to click away to see the project's history, so every dated entry above now also appears directly in the
+README, summarized to drop internal engineering detail (hashes, raw test-count tallies, file-rename bookkeeping)
+that only matters to someone editing the code - this file stays the untrimmed, authoritative version. Removed the
+old, now-redundant "Changes in this fork" section that duplicated part of the same story.
+
 ## 2026-10-26 - reproduced locked-vs-unlocked a day later, and measured real local LLM inference
 
 - Repeated the locked-vs-unlocked GEMM benchmark from 2026-10-25 a day later on the same machine: FP16 tensor
