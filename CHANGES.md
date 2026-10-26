@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-10-26 - reproduced locked-vs-unlocked a day later, and measured real local LLM inference
+
+- Repeated the locked-vs-unlocked GEMM benchmark from 2026-10-25 a day later on the same machine: FP16 tensor
+  26,338.7 -> 47,938.4 GFLOPS (+82.0%), BF16 26,296.6 -> 50,071.9 (+90.4%), FP32 control +0.8% (noise). Consistent
+  with the earlier run within normal variance.
+- Specifically tested whether a plain Windows **Restart** (not a full power-off) resets the card: confirmed yes -
+  this was the one open question left in the profile's hardware results. Both the locked and the unlocked side of
+  this comparison were independently confirmed (not just assumed from whether the unlock was scheduled): locked by
+  the FP16/FP32 ratio matching the documented locked reference, unlocked by the unlock program's own post-reset
+  register readout in its boot report.
+- New: measured how much of that raw gain reaches actual local LLM inference (a llama.cpp-based server), isolated
+  to this one card. Prefill (prompt processing) gained +3.2% on a ~7,600-token prompt and +7.6% on a ~31,000-token
+  prompt; decode (token generation) showed no measurable change at any size tested. Documented why the gap between
+  +82% raw and +3-8% real is expected (KV-cache memory bandwidth, elementwise ops, quantization and smaller/more
+  fragmented matmuls don't benefit the way one continuous saturating GEMM does). See
+  [PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md).
+
 ## 2026-10-26 - a notification for the stuck circuit breaker, and a release-freshness check
 
 - **Every-boot mode now tells you, not just the status screen.** The startup task's circuit breaker (see

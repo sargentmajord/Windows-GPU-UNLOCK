@@ -56,7 +56,42 @@ The firmware's two console drivers (file IDs `43e7abdd-...` graphics and `628a49
 | Automatic mode, 1 boot (no keypress) | transaction result 0, same selectors; FP16 48.61, BF16 50.17 TFLOPS |
 | 5-minute sustained run (43 runs) | FP16 47.1-48.1, BF16 49.2-49.7 TFLOPS; peak 68 C and 149 W; no Windows GPU or hardware-error events |
 
-Measured with driver 617.42. The unlock is not permanent: it is applied again at each boot by the unlock program and is lost at power-off. This is one card on one machine; it is not a promise for other hardware. Sleep and a normal Windows restart have not been tested.
+Measured with driver 617.42. The unlock is not permanent: it is applied again at each boot by the unlock program and is lost at power-off. This is one card on one machine; it is not a promise for other hardware. Sleep has not been tested. A normal Windows restart (not a full shutdown) has now been tested (see below) and does reset the card to locked - every-boot mode's whole design depends on this.
+
+## Locked vs. unlocked, reproduced a day later (2026-10-26)
+
+A second round, a day after the results above, specifically to settle whether a plain Windows **Restart** (as opposed to a full power-off) actually resets the card, and to measure how much of the raw tensor-math gain shows up in real local LLM inference rather than just in a synthetic benchmark.
+
+**Confirming each state independently**, not just assuming it from whether the unlock was scheduled:
+
+- **Locked**: every-boot mode turned off, no one-time boot entry queued, restart, confirmed nothing ran (no new boot report). Independently confirmed by the FP16/FP32 ratio reading 3.25, matching the ~3.2 locked reference above.
+- **Unlocked**: every-boot mode turned back on, restart, confirmed via the unlock program's own post-reset register readout in its boot report (`SS0=0, SS1=0` before the transaction -> `SS0=0x88888888, SS1=0x8` after, the exact intended target values). Independently confirmed by the FP16/FP32 ratio reading 5.87, matching the ~5.9 unlocked reference above.
+
+This also answers the open question above: a normal **Restart** does reset the card back to its locked default - the queued one-time boot entry is what reapplies the unlock on the next start, not anything about the restart itself being different from a cold boot.
+
+| Measurement | Locked | Unlocked | Change |
+|---|---|---|---|
+| Raw GEMM, FP16 tensor (median of 3) | 26,338.7 GFLOPS | 47,938.4 GFLOPS | +82.0% |
+| Raw GEMM, BF16 tensor (median of 3) | 26,296.6 GFLOPS | 50,071.9 GFLOPS | +90.4% |
+| Raw GEMM, FP32 (control) | 8,110.4 GFLOPS | 8,174.3 GFLOPS | +0.8% (noise; confirms comparable thermal/clock conditions on both sides) |
+
+Consistent with the 2026-10-25 run above within normal run-to-run variance.
+
+### How much of that reaches a real local LLM
+
+Same card, same locked/unlocked states (confirmed the same way), this time running actual local LLM inference through a llama.cpp-based server (Ollama), flash attention on, forced onto this one card alone (`CUDA_VISIBLE_DEVICES`) so the reading isn't diluted by a second GPU in the system. The chat model is a 7.6B-parameter Qwen2-architecture instruction-tuned model, Q4_K_M quantization. Prefill (processing the prompt, the matrix-multiply-heavy phase) and decode (generating each new token, memory-bandwidth-bound) were measured separately:
+
+| Test | Locked | Unlocked | Change |
+|---|---|---|---|
+| Prefill, ~7,600-token prompt | 2,182.5 tok/s | 2,252.3 tok/s | +3.2% |
+| Prefill, ~31,000-token prompt, larger batch (same model) | 1,573.6 tok/s | 1,693.4 tok/s | +7.6% |
+| Decode (token generation) | no measurable change either way | | ~0% |
+
+Decode speed was also checked on a much larger model (31.1B-parameter Qwen3-VL mixture-of-experts vision-language model, same quantization) and showed the same flat result; that model doesn't fit on one 12 GB card, so Ollama splits it across both GPUs, meaning only part of its compute happens on the unlocked card at all - it's reported here only to confirm the decode-is-flat finding holds at a different model size and architecture, not as a clean before/after number.
+
+**Why +82% raw compute turns into only +3-8% in practice:** the GEMM benchmark is one large matrix multiply running back-to-back with nothing else happening, fully saturating the tensor cores. Real inference mixes matmuls with plenty of work the unlock does nothing for: reading and writing the KV cache (pure memory bandwidth, unchanged by the unlock), softmax/normalization/RoPE (elementwise, not tensor-core math), dequantizing compressed weights, and many smaller matmuls with overhead between them instead of one continuous saturating one. The longer the prompt, the more that fixed/memory-bound overhead gets diluted by actual matmul work, which is why the gain roughly doubled (+3.2% -> +7.6%) between the two prompt sizes - but it is still far from the raw ceiling, because attention cost over a long context is itself increasingly memory-bound, not compute-bound. Decode never benefits at all, at any prompt size, because generating one token at a time is memory-bandwidth-bound by nature, not compute-bound.
+
+**Bottom line:** the unlock's effect on real local LLM inference is real, repeatable and hardware-verified on both sides of the comparison, but modest - a few percent faster prompt processing, nothing on generation speed. Treat the raw GEMM percentages as the ceiling for pure matrix math on this card, not as an estimate of real-world LLM speedup.
 
 ## Credits and license
 

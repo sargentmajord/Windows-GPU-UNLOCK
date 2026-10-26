@@ -16,12 +16,20 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   returned to Windows.
 - Matrix-multiply benchmark (4096x4096, median of three, driver 617.42): FP16 tensor 26.51 -> 48.13 TFLOPS (+81.6%), BF16 tensor
   26.40 -> 50.34 TFLOPS (+90.7%), FP32 unchanged (8.20 -> 8.18). A five-minute sustained run stayed within about 3% of those values.
-- **Not verified:** other cards, boards, firmware versions or operating systems; sleep and normal Windows restart; the automatic (no keypress) mode beyond one boot; the guided installer on any other PC; the no-cancel extra on hardware; a real run of the optional automatic mode through the installer (requirements: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
+- **Reproduced a day later, plus two things newly confirmed (2026-10-26):** the benchmark above again (FP16 26.34 -> 47.94 TFLOPS, consistent
+  within normal variance), and that a normal Windows **Restart** (not just a full power-off) resets the card back to locked - both the locked
+  and unlocked state were confirmed independently (register readout and ratio match), not just assumed. Also measured, for the first time, how
+  much of that raw gain reaches real local LLM inference on the same card: prompt processing (prefill) gained +3.2% to +7.6% depending on
+  prompt length; token generation (decode) showed no measurable change. Full numbers and why real-world gains are so much smaller than the raw
+  TFLOPS figure: [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md#locked-vs-unlocked-reproduced-a-day-later-2026-10-26).
+- **Not verified:** other cards, boards, firmware versions or operating systems; sleep; the automatic (no keypress) mode beyond one boot; the guided installer on any other PC; the no-cancel extra on hardware; a real run of the optional automatic mode through the installer (requirements: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
 - **Other cards and PCs are refused, not guessed.** The installer builds its boot programs from a read-only capture of your own PC, runs every check again at boot, and runs host tests
   against your own capture before anything is put on the boot partition. Some of those tests still contain the reference card's own expectations (the size and offsets of its video BIOS
   firmware part). They pass for the reference RTX 3060; on a different card they may fail, and then the installer stops and writes a report instead of continuing. That is the safe direction,
   but it means only the reference machine is known to get all the way through; reports from other PCs are how this gets generalized.
-- Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation). Games, FP32 work and memory-bound work do not.
+- Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation) - and real-world gains are well below the raw
+  TFLOPS number, since actual workloads mix in memory-bound work the unlock doesn't touch; measured real local LLM prefill gained +3-8%, not
+  +82%. Games, FP32 work and memory-bound work (including LLM token generation/decode) do not speed up at all.
 
 ## Read this before trying anything
 
