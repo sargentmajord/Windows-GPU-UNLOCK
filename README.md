@@ -1,11 +1,11 @@
-# Windows GPU UNLOCK - RTX 3060 fork (work in progress)
+# Windows GPU UNLOCK - universal installer fork
 
-An experimental, **unreleased** fork of [impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK), the Windows UEFI
+A fork of [impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK), the Windows UEFI
 port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a short program before Windows starts that sets the tensor-math
-speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork converts the project to one documented
-machine and works toward a single guided installer for other PCs.
+speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork adds a guided, self-service installer
+(text and graphical) with roll back, update-in-place and a full test suite, built and verified on one documented machine.
 
-**Status: nothing here is a release.** A guided installer exists and is covered by automated tests (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)), but only one machine is known to get all the way through it. Everything below describes that machine.
+**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: only one machine is known to get all the way through it** — see what that means for other hardware right below. Everything below describes that machine unless noted otherwise.
 
 ## What has been verified (one machine, 2026-10-25)
 
