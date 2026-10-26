@@ -125,11 +125,11 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
 #ifdef GU_HEADLESS_RESEARCH
     GuLog("HEADLESS RESEARCH: file-only log; zero physical GOP; automatic exact-card unlock; hardware untested.\n");
 #endif
-    GuLog("RTX3060 AUTOMATIC INTERNAL UNLOCK\nAUTO%06u\nEsc cancels; exact hardware gates and one transaction only.\n",(unsigned)slot);
+    GuLog(GU_TARGET_SHORT_NOSPACE " AUTOMATIC INTERNAL UNLOCK\nAUTO%06u\nEsc cancels; exact hardware gates and one transaction only.\n",(unsigned)slot);
 #elif defined(GU_EXPERIMENTAL_UNLOCK)
-    GuLog("RTX3060 EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",(unsigned)slot);
+    GuLog(GU_TARGET_SHORT_NOSPACE " EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",(unsigned)slot);
 #else
-    GuLog("RTX3060 read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",(unsigned)slot);
+    GuLog(GU_TARGET_SHORT_NOSPACE " read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",(unsigned)slot);
 #endif
     return GuLogReady()?EFI_SUCCESS:EFI_DEVICE_ERROR;
   }

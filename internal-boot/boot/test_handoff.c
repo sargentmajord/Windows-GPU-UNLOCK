@@ -87,7 +87,7 @@ static VOID service_tests(VOID) {
 }
 int main(int argc,char **argv) {
   if(argc!=2)return 2;
-  FILE*f=fopen(argv[1],"rb");if(!f)return 2;
+  FILE*f=fopen(argv[1],"rb");if(!f){fprintf(stderr,"cannot open image %s (is the folder path too long? Windows limits a path to 259 characters)\n",argv[1]);return 2;}
   fseek(f,0,SEEK_END);imageSize=(UINTN)ftell(f);rewind(f);imageBytes=malloc(imageSize);
   if(!imageBytes || fread(imageBytes,1,imageSize,f)!=imageSize)return 2;fclose(f);
   CHECK(imageSize==GU_UNLOCK_BYTES);flow_tests();path_tests();service_tests();free(imageBytes);

@@ -158,7 +158,7 @@ static EFI_STATUS ConfigCheck(BOOLEAN Save) {
   if(EFI_ERROR(status))return status;
   status=ReadConfig(config);if(EFI_ERROR(status))return status;
   BOOLEAN checked=GuCheckConfig(config,segment,bus,device,function,&caps);
-  BOOLEAN valid=checked && config[2]==0x030000a1 && config[0xc8/4]==0x00050011 &&
+  BOOLEAN valid=checked && config[2]==GU_CONFIG_CLASS_REV && config[GU_MSIX_CAP_OFFSET/4]==GU_MSIX_CAP_DWORD &&
     config[0x10/4]==GU_BAR0_BASE && !(config[(caps.pcie+8)/4]&0x00200000U);
   BOOLEAN same=Save || !memcmp(config,InitialConfig,sizeof(config));
   if(Save || !valid || !same)ConfigLog(config);
@@ -359,7 +359,7 @@ static EFI_STATUS Arm(VOID) {
 #else
   if(!Table->ConIn || !Table->ConIn->Reset || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
-  GuLog("EXPERIMENTAL MANUAL UNLOCK: profile=%s exact RTX3060 12GB / RTX 5070 display / verified PROM and assets.\n",GU_STOCK_PROFILE_NAME);
+  GuLog("EXPERIMENTAL MANUAL UNLOCK: profile=%s exact " GU_TARGET_SHORT_NOSPACE " 12GB / " GU_CONSOLE_SHORT " display / verified PROM and assets.\n",GU_STOCK_PROFILE_NAME);
   if(PendingOwner.agent)GuLogText("U will release the RTX firmware driver, restore verified access settings if needed, then recheck and attempt once.\n");
   GuLogText("Press U to attempt once; Esc or 30-second timeout cancels.\n");
   if(!GuLogReady())return EFI_DEVICE_ERROR;

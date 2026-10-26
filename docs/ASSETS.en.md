@@ -5,6 +5,15 @@ NVIDIA firmware, VBIOS/PROM dumps and driver DLLs are not included. Exact sizes 
 
 Use legally available original inputs and follow the upstream [firmware instructions at the pinned commit](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956/firmware). This case uses the **GA102 / 610.43.03** firmware family. This is **not** an instruction to install Windows driver 610.43.03; the successful Windows case used 617.14.
 
+## On Windows without WSL (what the installer does)
+
+`installer/Firmware.ps1` runs upstream's own scripts (unchanged copies in `firmware-tools/`) natively: it downloads the two pinned inputs
+(NVIDIA's open kernel module source, about 26 MB, and the `nvidia-utils` driver package, about 315 MB) plus the portable `zstd.exe`
+(about 1.7 MB, SHA-256 `acb4e8111511749dc7a3ebedca9b04190e37a17afeb73f55d4425dbf0b90fad9`), checks each against its pinned SHA-256, and
+runs `generate_v67.py` and `extract_boot_assets.py` with Python 3.12. Upstream's README names Python 3.14, but at this commit the
+scripts call the `zstd` command for the package instead. Verified on 2026-10-25: this route reproduced all five files with the sizes and
+hashes in `internal-boot/unlock/assets.json`. Source: [Zagitta/gpu-unlock firmware/](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956/firmware).
+
 ## Generate with the upstream tools
 
 In WSL/Linux, prepare Git, make, tar and **Python 3.14 or newer**. The pinned upstream tool requires Python 3.14 for `.tar.zst` input handling. This differs from the Windows EFI build/packaging Python requirement.

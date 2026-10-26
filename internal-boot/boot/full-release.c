@@ -61,9 +61,9 @@ static EFI_STATUS ReadConfigFull(UINT32 *cfg) {
   if(s!=EFI_SUCCESS || io!=PreparedPlan.RtxIo || !io->GetLocation || !io->Pci.Read)return EFI_NOT_READY;
   UINTN seg=0,bus=0,dev=0,fun=0;
   s=io->GetLocation(io,&seg,&bus,&dev,&fun);
-  if(s!=EFI_SUCCESS || seg || bus!=1 || dev || fun)return EFI_UNSUPPORTED;
+  if(s!=EFI_SUCCESS || seg || bus!=GU_TARGET_BUS || dev || fun)return EFI_UNSUPPORTED;
   s=io->Pci.Read(io,EfiPciIoWidthUint32,0,64,cfg);
-  if(s==EFI_SUCCESS && (cfg[0]!=GU_BOARD_ID || cfg[11]!=GU_BOARD_SUBSYSTEM || cfg[2]!=0x030000a1 || cfg[4]!=(UINT32)GU_BAR0_BASE || (cfg[1]&4)))s=EFI_UNSUPPORTED;
+  if(s==EFI_SUCCESS && (cfg[0]!=GU_BOARD_ID || cfg[11]!=GU_BOARD_SUBSYSTEM || cfg[2]!=GU_CONFIG_CLASS_REV || cfg[4]!=(UINT32)GU_BAR0_BASE || (cfg[1]&4)))s=EFI_UNSUPPORTED;
   return s;
 }
 static EFI_STATUS CheckBar(BOOLEAN first) {
@@ -121,13 +121,13 @@ static EFI_STATUS Profile(EFI_HANDLE agent,BOOLEAN mouse) {
     if(n!=24 || im->FilePath->Type!=MEDIA_DEVICE_PATH || im->FilePath->SubType!=MEDIA_PIWG_FW_FILE_DP ||
        im->FilePath->Length[0]!=20 || im->FilePath->Length[1] || !GuGuidEqual((UINT8 *)im->FilePath+4,&MouseFile))return EFI_UNSUPPORTED;
   } else {
-    const CHAR16 name[]=L"nvgop-ga1xx";
+    const CHAR16 name[]=GU_NVGOP_NAME;
     if(im->DeviceHandle!=PreparedPlan.RtxPci || n!=4+sizeof(name)+4 || im->FilePath->Type!=MEDIA_DEVICE_PATH || im->FilePath->SubType!=MEDIA_FILEPATH_DP ||
        im->FilePath->Length[0]!=4+sizeof(name) || im->FilePath->Length[1] || !Bytes((UINT8 *)im->FilePath+4,name,sizeof(name)))return EFI_UNSUPPORTED;
   }
   /* Both original PE relocation tables contain zero relocations in .text.
    * Therefore hash the loaded code range directly; never hash relocated data. */
-  UINTN rva=mouse?0x1000:0x280,bytes=mouse?GU_EDID_TEXT_BYTES:GU_NVGOP_TEXT_BYTES;
+  UINTN rva=mouse?0x1000:GU_NVGOP_TEXT_RVA,bytes=mouse?GU_EDID_TEXT_BYTES:GU_NVGOP_TEXT_BYTES;
   const char *hash=mouse?GU_EDID_TEXT_SHA256:GU_NVGOP_TEXT_SHA256;
   return GuHashMatches((UINT8 *)im->ImageBase+rva,bytes,hash)?EFI_SUCCESS:EFI_CRC_ERROR;
 }
@@ -151,7 +151,7 @@ static EFI_STATUS FullConsumers(const GRAPH *g) {
     EFI_STATUS s=Interface(bs,Full.Children[0],&PathGuid,(VOID **)&path);
     if(s!=EFI_SUCCESS || !DisplayRoute(path,RtxPath))return EFI_UNSUPPORTED;
     UINT32 cfg[16];EFI_HANDLE pci=NULL;EFI_PCI_IO_PROTOCOL *io=NULL;
-    s=PciFor(bs,path,1,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&pci,&io,cfg);
+    s=PciFor(bs,path,GU_TARGET_BUS,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&pci,&io,cfg);
     if(s!=EFI_SUCCESS || pci!=PreparedPlan.RtxPci || io!=PreparedPlan.RtxIo || !Bytes(cfg,PreparedPlan.RtxConfig,sizeof(cfg)))return EFI_NOT_READY;
     for(UINTN j=0;j<36;j++)Full.ChildPaths[0][j]=((UINT8 *)path)[j];
     if(Interface(bs,Full.Children[0],&EdidGuid,&edid)!=EFI_SUCCESS)return EFI_UNSUPPORTED;
@@ -197,7 +197,7 @@ static EFI_STATUS FullConsumers(const GRAPH *g) {
     EFI_STATUS s=Interface(bs,Full.Children[c],&PathGuid,(VOID **)&path);
     if(s!=EFI_SUCCESS || !DisplayRoute(path,RtxPath))return EFI_UNSUPPORTED;
     UINT32 cfg[16];EFI_HANDLE pci=NULL;EFI_PCI_IO_PROTOCOL *io=NULL;
-    s=PciFor(bs,path,1,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&pci,&io,cfg);
+    s=PciFor(bs,path,GU_TARGET_BUS,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&pci,&io,cfg);
     if(s!=EFI_SUCCESS || pci!=PreparedPlan.RtxPci || io!=PreparedPlan.RtxIo || !Bytes(cfg,PreparedPlan.RtxConfig,sizeof(cfg)))return EFI_NOT_READY;
     for(UINTN j=0;j<36;j++)Full.ChildPaths[c][j]=((UINT8 *)path)[j];
     for(UINTN prior=0;prior<c;prior++)if(Bytes(Full.ChildPaths[prior],path,36))return EFI_UNSUPPORTED;
@@ -381,7 +381,7 @@ static EFI_STATUS OtherOnly(VOID) {
 }
 static EFI_STATUS CapturePermit(VOID) {
   GU_CAPS caps;EFI_STATUS s=ReadConfigFull(Full.Config);
-  if(s==EFI_SUCCESS && (!GuCheckConfig(Full.Config,0,1,0,0,&caps) || Full.Config[4]!=(UINT32)GU_BAR0_BASE || Full.Config[2]!=0x030000a1))s=EFI_UNSUPPORTED;
+  if(s==EFI_SUCCESS && (!GuCheckConfig(Full.Config,0,GU_TARGET_BUS,0,0,&caps) || Full.Config[4]!=(UINT32)GU_BAR0_BASE || Full.Config[2]!=GU_CONFIG_CLASS_REV))s=EFI_UNSUPPORTED;
   s=Note("capture-pci-config256",s);if(s!=EFI_SUCCESS)return s;
   s=LogConfig("pre-nv-pci",Full.Config);if(s!=EFI_SUCCESS)return s;
   s=Note("capture-bar0",CheckBar(TRUE));if(s!=EFI_SUCCESS)return s;
@@ -526,7 +526,7 @@ const GU_VERIFY_DIAGNOSTIC *GuLastVerifyDiagnostic(VOID) {return &VerifyDiagnost
 static BOOLEAN VerifyConfigWord(UINTN word,UINT32 expected,UINT32 observed,BOOLEAN checkCold) {
   if(expected==observed)return TRUE;
   const UINT32 clearable=0x00090000;
-  if(checkCold || word!=0x80/4 || Full.Config[0x78/4]!=0x0012b410)return FALSE;
+  if(checkCold || word!=(GU_PCIE_CAP_OFFSET+8U)/4 || Full.Config[GU_PCIE_CAP_OFFSET/4]!=GU_PCIE_CAP_DWORD)return FALSE;
   return (expected & ~clearable)==(observed & ~clearable) &&
     !(observed & clearable & ~expected);
 }

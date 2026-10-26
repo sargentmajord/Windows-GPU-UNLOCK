@@ -53,14 +53,16 @@ int main(int argc, char **argv) {
     printf("{\"cuda_runtime\":%d,\"cublas_major\":%d,\"cublas_minor\":%d,\"cublas_patch\":%d,\"gpu_workload_run\":false}\n",runtime,major,minor,patch);
     return 0;
   }
-  if(argc!=1){fprintf(stderr,"Only --inspect-only or no arguments are supported\n");return 2;}
+  // --pci DDDD:BB:DD.F selects the card by its PCI address; the card's name is reported, never assumed.
+  unsigned domain=0,bus=0,device=0,function=0;
+  if(argc!=3 || strcmp(argv[1],"--pci") || sscanf(argv[2],"%x:%x:%x.%x",&domain,&bus,&device,&function)!=4){fprintf(stderr,"Usage: compute-benchmark --inspect-only | --pci DDDD:BB:DD.F\n");return 2;}
   int devices=0;cuda_check(cudaGetDeviceCount(&devices));int selected=-1;cudaDeviceProp properties={};
   for(int i=0;i<devices;i++) {cudaDeviceProp p;cuda_check(cudaGetDeviceProperties(&p,i));
-    if(!strcmp(p.name,"NVIDIA GeForce RTX 3060") && !p.pciDomainID && p.pciBusID==1 && !p.pciDeviceID){if(selected!=-1)return 2;selected=i;properties=p;}}
-  if(selected<0){fprintf(stderr,"Exact RTX 3060 at 0000:01:00.0 not found\n");return 2;}
+    if((unsigned)p.pciDomainID==domain && (unsigned)p.pciBusID==bus && (unsigned)p.pciDeviceID==device){if(selected!=-1)return 2;selected=i;properties=p;}}
+  if(selected<0){fprintf(stderr,"No CUDA card at %04x:%02x:%02x.%x\n",domain,bus,device,function);return 2;}
   cuda_check(cudaSetDevice(selected));cublasHandle_t handle;blas_check(cublasCreate(&handle));
   int runtime=0,driver=0,blas=0;cuda_check(cudaRuntimeGetVersion(&runtime));cuda_check(cudaDriverGetVersion(&driver));blas_check(cublasGetVersion(handle,&blas));
-  printf("{\"gpu\":\"%s\",\"pci\":\"0000:01:00.0\",\"compute_capability\":\"%d.%d\",\"cuda_runtime\":%d,\"cuda_driver_api\":%d,\"cublas\":%d,\"benchmarks\":[",properties.name,properties.major,properties.minor,runtime,driver,blas);
+  printf("{\"gpu\":\"%s\",\"pci\":\"%04x:%02x:%02x.%x\",\"compute_capability\":\"%d.%d\",\"cuda_runtime\":%d,\"cuda_driver_api\":%d,\"cublas\":%d,\"benchmarks\":[",properties.name,domain,bus,device,function,properties.major,properties.minor,runtime,driver,blas);
   for(int kind=0;kind<3;kind++)measure(handle,kind);
   blas_check(cublasDestroy(handle));puts("]}");return 0;
 }

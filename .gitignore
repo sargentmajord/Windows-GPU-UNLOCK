@@ -29,3 +29,4 @@ internal-boot/install/state.json
 internal-boot/install/headless-state.json
 internal-boot/install/headless-state.json.pending-*
 internal-boot/deps/
+reports/

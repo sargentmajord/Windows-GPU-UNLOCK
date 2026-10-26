@@ -44,7 +44,14 @@ or download those locally.
 
 `benchmark/upstream-compute-benchmark.cu` and `benchmark/LICENSE` are the public benchmark source and licence from
 [rough2515-hub/rtx3080-unlock-public](https://github.com/rough2515-hub/rtx3080-unlock-public/tree/a08254d269af30ace9e57237abd3d8e6c261e8f5)
-(`analysis/compute-benchmark.cu`). `benchmark/compute-benchmark-3060.cu` is a modified copy for this machine.
+(`analysis/compute-benchmark.cu`). `benchmark/compute-benchmark.cu` is a modified copy that selects the card by PCI bus address.
+
+## Firmware generation scripts - GPL-2.0-only
+
+- Source: [Zagitta/gpu-unlock, `firmware/`](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956/firmware) at the pinned commit
+  `0ebdb1c6308b6a2072be5bf04513472942541956`; unchanged copies in `firmware-tools/` (see `firmware-tools/SOURCE.txt`).
+- Used by the installer to generate the NVIDIA firmware files on the user's own PC. No NVIDIA firmware is shipped; read
+  `firmware-tools/NOTICE.md` for what may and may not be done with the generated files.
 
 ## EDK2 headers - BSD-2-Clause-Patent
 

@@ -16,10 +16,10 @@ try {
 ==================== DISCLAIMER ====================
 This patch REMOVES the two Esc cancel windows (5 s and 3 s) from the automatic unlock boot.
  - Experimental third-party software, provided "as is", with NO WARRANTY, under GPL-2.0-only. Use at your own risk.
- - You will NOT be able to cancel from the keyboard during boot. To abort you must power off or use another boot entry.
+ - You will NOT be able to cancel from the keyboard during boot. To abort you must power off.
  - If any hardware check fails, the boot stops on a frozen screen. You must hold the power button, power on again and
-   choose Windows Boot Manager from your firmware boot menu.
- - Do not use it if you cannot recover that way. Keep a working Windows Boot Manager entry.
+   Windows then starts normally; no BIOS or boot menu is needed.
+ - Do not use it if you cannot be at the PC to do that. Keep Windows Boot Manager first in the firmware boot order.
  - All hardware checks stay in place; this patch adds no switch to skip a check.
  - Verified only on the reference machine in CHANGES.md. The video BIOS is not modified; the unlock is lost at power-off.
 ====================================================

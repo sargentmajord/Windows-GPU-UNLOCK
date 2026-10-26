@@ -25,7 +25,7 @@ static BOOLEAN PhaseForHeadlessTest(VOID) {return Phase>=4;}
 static const UINT32 MockCold[]={GU_CHIP_ID,0x8b8f,0x3ff,0x10,0,0xffffff8f,0x46425000,4,GU_DEVICE_MEMORY_SIZE};
 
 static VOID LoadMapped(const char *path,UINT8 *memory,UINTN size) {
-  FILE *f=fopen(path,"rb");Check(f!=NULL,"driver fixture exists");
+  FILE *f=fopen(path,"rb");Check(f!=NULL,"driver fixture exists (cannot open it: is the folder path too long?)");
   fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);UINT8 *data=malloc(n);
   Check(data && fread(data,1,n,f)==(UINTN)n,"read driver fixture");fclose(f);
   UINT32 pe=*(UINT32 *)(data+0x3c);UINT16 count=*(UINT16 *)(data+pe+6),optional=*(UINT16 *)(data+pe+20);

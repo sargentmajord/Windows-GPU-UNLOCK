@@ -5,7 +5,7 @@ port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a s
 speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork converts the project to one documented
 machine and works toward a single guided installer for other PCs.
 
-**Status: nothing here is a release, and no installer is published yet.** Everything below describes one machine.
+**Status: nothing here is a release.** A guided installer exists and is covered by automated tests (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)), but only one machine is known to get all the way through it. Everything below describes that machine.
 
 ## What has been verified (one machine, 2026-10-25)
 
@@ -16,13 +16,17 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   returned to Windows.
 - Matrix-multiply benchmark (4096x4096, median of three, driver 617.42): FP16 tensor 26.51 -> 48.13 TFLOPS (+81.6%), BF16 tensor
   26.40 -> 50.34 TFLOPS (+90.7%), FP32 unchanged (8.20 -> 8.18). A five-minute sustained run stayed within about 3% of those values.
-- **Not verified:** other cards, boards, firmware versions or operating systems; sleep and normal Windows restart; the automatic (no keypress) mode beyond one boot; the guided installer (still a plan: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
+- **Not verified:** other cards, boards, firmware versions or operating systems; sleep and normal Windows restart; the automatic (no keypress) mode beyond one boot; the guided installer on any other PC; the no-cancel extra on hardware; a real run of the optional automatic mode through the installer (requirements: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
+- **Other cards and PCs are refused, not guessed.** The installer builds its boot programs from a read-only capture of your own PC, runs every check again at boot, and runs host tests
+  against your own capture before anything is put on the boot partition. Some of those tests still contain the reference card's own expectations (the size and offsets of its video BIOS
+  firmware part). They pass for the reference RTX 3060; on a different card they may fail, and then the installer stops and writes a report instead of continuing. That is the safe direction,
+  but it means only the reference machine is known to get all the way through; reports from other PCs are how this gets generalized.
 - Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation). Games, FP32 work and memory-bound work do not.
 
 ## Read this before trying anything
 
 - **No warranty.** This writes to GPU registers before Windows starts. It is unofficial, unsupported by NVIDIA and may void a warranty.
-  Use a card you can afford to lose, and keep a Windows-first boot recovery path. Nothing here flashes the video BIOS; the unlock is lost at every
+  Use a card you can afford to lose, and know the recovery: if a start freezes, hold the power button and power on again (Windows then starts normally). Nothing here flashes the video BIOS; the unlock is lost at every
   power-off and applied again each boot.
 - **Requirements:** Windows 11 x64 in UEFI mode, Secure Boot **off**, BitLocker off, Windows Fast Startup off (for automatic mode), a second
   graphics adapter that keeps the screen working, and a display attached to the target card. Games with anti-cheat that requires Secure Boot
@@ -34,9 +38,10 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 
 | Path | Purpose |
 |---|---|
+| [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md) | how to use the installer, step by step, and how Roll back works |
 | [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md) | the reference machine and its measured results |
 | [docs/CHECKS.md](docs/CHECKS.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | pre-flight checks and fixes |
-| [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md) | requirements for the planned one-command installer |
+| [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md) | requirements the installer is built to |
 | [docs/AUDIT-2026-10-25.md](docs/AUDIT-2026-10-25.md) | what was checked before the first hardware step |
 | `internal-boot/` | the boot programs, build and staging scripts, host tests |
 | `patches/` | optional patches, including one that removes the automatic mode's Esc cancel windows (with disclaimer) |

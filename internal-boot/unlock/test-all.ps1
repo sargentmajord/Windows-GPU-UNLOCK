@@ -25,13 +25,14 @@ try {
   switch($profile){'original03100062'{'-DGU_STOCK_PROFILE_ORIGINAL_03100062'} 'observed03000062'{'-DGU_STOCK_PROFILE_OBSERVED_03000062'} 'entryLatchedSs1Preserve'{'-DGU_ENTRY_LATCHED_SS1_PRESERVE'} 'entryLatchedSs1Full'{'-DGU_ENTRY_LATCHED_SS1_FULL'}}
  }
  # Import VS2022's host CRT/SDK environment for the official LLVM compiler.
+ $vsi=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer';if((Test-Path -LiteralPath $vsi) -and ($env:PATH -notlike "*$vsi*")){$env:PATH="$vsi;$env:PATH"}   # vcvars64.bat calls vswhere.exe
  $vc=$VcVars
  $environment=& cmd.exe /d /c "call `"$vc`" >nul && set"
  if($LASTEXITCODE -ne 0){throw 'VS2022 environment failed'}
  foreach($line in $environment){if($line -match '^([^=]+)=(.*)$'){[Environment]::SetEnvironmentVariable($matches[1],$matches[2],'Process')}}
  $flags=@('-std=c11','-O1','-Wall','-Wextra','-Werror','-Wno-unused-parameter','-Wno-unused-function','-D_CRT_SECURE_NO_WARNINGS','-Icompat','-I../../deps/edk2/MdePkg/Include','-I../../deps/edk2/MdePkg/Include/X64')
  $core=@('port.c','compat.c','vendor/unlock_610.c','vendor/prep_610.c','vendor/layout_610.c','vendor/vbios_610.c','vendor/gfw_eval.c')
- $defs=@('-D__KERNEL__','-DGU_UEFI_PORT','-DGU_TARGET_PCI_ID=0x254410deU')
+ $defs=@('-D__KERNEL__','-DGU_UEFI_PORT')
  if($InternalBoot) {
   if(!$ExperimentalUnlock -or $StockProfile -ne 'entryLatchedSs1Full'){throw 'Internal tests require the full profile'}
   $defs+='-DGU_INTERNAL_BOOT'

@@ -8,15 +8,22 @@ param(
  [switch]$AutomaticBoot,
  [switch]$HeadlessResearch,
  [ValidateSet('original03100062','observed03000062','entryLatchedSs1Preserve','entryLatchedSs1Full')][string]$StockProfile,
- [ValidateSet('z790-3060')][string]$HardwareProfile='z790-3060'
+ [string]$HardwareProfile='z790-3060'
 )
-# Reviewed single-machine profiles; mirrors internal-boot/unlock/machine-profile.h.
-# A profile is fixed provenance: it selects constants compiled into the EFI,
-# never a user-editable switch.
-$hwTable=@{
- 'z790-3060'=[ordered]@{Define='-DGU_PROFILE_Z790_3060';Name='MSI-MEG-Z790-GODLIKE-1.I0-RTX3060';TargetPci='254410de';Subsystem='397d1462';Chip='0xb76000a1';Prom='5630f3a825e52a225fcead26663288fa6c2017ad46dde6335388a01e7f03a38d';Memory='0x3000';HeadlessOnly=$false}
+# The profile is the single source of per-machine constants: unlock/profiles/<name>/profile.h for the reference
+# machine, or a generated profile.h in a folder the installer puts on CPATH (see machine-profile.h).
+function Get-ProfileValue([string]$Text,[string]$Name){
+ $m=[regex]::Match($Text,'(?m)^#define\s+'+$Name+'\s+("[^"]*"|\S+)');if(!$m.Success){throw "Profile has no $Name"};$m.Groups[1].Value.Trim('"')
 }
-$hw=$hwTable[$HardwareProfile]
+$profileDir=if($env:CPATH){($env:CPATH -split ';' | Where-Object {$_ -and (Test-Path -LiteralPath (Join-Path $_ 'profile.h'))} | Select-Object -First 1)}else{$null}
+$profileFile=if($profileDir){Join-Path $profileDir 'profile.h'}else{Join-Path $PSScriptRoot 'profiles/z790-3060/profile.h'}
+$profileText=Get-Content -LiteralPath $profileFile -Raw
+$hw=[ordered]@{Name=(Get-ProfileValue $profileText 'GU_PROFILE_NAME');
+ TargetPci=((Get-ProfileValue $profileText 'GU_BOARD_ID') -replace '^0x','' -replace 'U$','');
+ Subsystem=((Get-ProfileValue $profileText 'GU_BOARD_SUBSYSTEM') -replace '^0x','' -replace 'U$','');
+ Chip=((Get-ProfileValue $profileText 'GU_CHIP_ID') -replace 'U$','');
+ Prom=(Get-ProfileValue $profileText 'GU_PROM_SHA256');
+ Memory=((Get-ProfileValue $profileText 'GU_DEVICE_MEMORY_SIZE') -replace 'U$','');HeadlessOnly=$false}
 $ErrorActionPreference='Stop'
 Push-Location -LiteralPath $PSScriptRoot
 try {
@@ -42,7 +49,7 @@ try {
  $objects=@()
  foreach($source in $sources) {
   $object="$out/"+($source -replace '/','_')+'.obj'
-  & $Clang -target x86_64-pc-windows-msvc -std=c11 -ffreestanding -fno-builtin -fno-stack-protector -mno-red-zone -fshort-wchar -Os -Wall -Wextra -Werror -Wno-unused-parameter -D__KERNEL__ -DGU_UEFI_PORT "-DGU_TARGET_PCI_ID=0x$($hw.TargetPci)U" @defines $hw.Define -I compat -I ../../deps/edk2/MdePkg/Include -I ../../deps/edk2/MdePkg/Include/X64 -c "$source.c" -o $object
+  & $Clang -target x86_64-pc-windows-msvc -std=c11 -ffreestanding -fno-builtin -fno-stack-protector -mno-red-zone -fshort-wchar -Os -Wall -Wextra -Werror -Wno-unused-parameter -D__KERNEL__ -DGU_UEFI_PORT @defines -I compat -I ../../deps/edk2/MdePkg/Include -I ../../deps/edk2/MdePkg/Include/X64 -c "$source.c" -o $object
   if($LASTEXITCODE -ne 0){throw "Compile failed: $source"};$objects+=$object
  }
  & $LldLink /nologo /nodefaultlib /subsystem:efi_application /entry:efi_main /machine:x64 /base:0 /dynamicbase /nxcompat /timestamp:0 /opt:ref /opt:icf "/map:$out/$name.map" "/out:$out/$name.EFI" @objects

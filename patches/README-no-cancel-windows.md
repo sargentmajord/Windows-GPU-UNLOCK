@@ -23,13 +23,12 @@ before anything is written. The patch does not add any switch that skips a check
 - This is third-party experimental software, provided **"as is", with no warranty of any kind**, under GPL-2.0-only.
   You use it at your own risk. The authors are not liable for damage, data loss, instability or a PC that does not boot.
 - With the waits removed, **you can no longer cancel from the keyboard during boot.** The only ways to abort are to power
-  the PC off, or to boot from another entry in your firmware's boot menu.
+  the PC off.
 - If a check fails, the boot **stops on a frozen screen** (by design; it never retries or resets). You must hold the power
-  button, power on again, and pick Windows Boot Manager from the firmware boot menu. If you cannot do that, do not use
-  this patch.
-- Do not apply it to a PC you cannot reach, to a PC you cannot recover without a keyboard, or to a machine whose only
-  boot entry is the unlock image.
-- Keep your own recovery path: a working Windows Boot Manager entry, and the key for your firmware's boot menu.
+  button and power on again. The queued boot is used up when it starts, so Windows starts normally; no BIOS or boot menu is needed.
+  If you cannot be at the PC to do that, do not use this patch.
+- Do not apply it to a PC you cannot reach, or to a machine whose only boot entry is the unlock image.
+- Keep Windows Boot Manager as the first entry in the firmware boot order; the unlock should only ever be started by a queued one-time boot.
 - It was verified only on the reference machine described in CHANGES.md. Other hardware may behave differently.
 - It does not flash or modify the video BIOS. The unlock is lost at every power-off and is applied again each boot.
 

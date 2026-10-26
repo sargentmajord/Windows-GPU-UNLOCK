@@ -7,7 +7,7 @@ skip a check. "Verified here" means the command was run on the reference machine
 | ID | What is checked | How (PowerShell) | Passes when | If it fails the script says |
 |---|---|---|---|---|
 | C01 | Administrator | `([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')` | True | Open PowerShell with "Run as administrator". |
-| C02 | Windows 11 x64, UEFI mode | `bcdedit /enum '{bootmgr}'` shows `path \EFI\Microsoft\Bootootmgfw.efi` (verified here); `Confirm-SecureBootUEFI` throws "Cmdlet not supported on this platform" on legacy BIOS. (The registry value `PEFirmwareType` and `$env:firmware_type` are not reliable: the first was empty on the reference PC.) | `.efi` path | The PC boots in legacy (CSM/BIOS) mode. Switch the boot mode to UEFI. Changing this can stop Windows booting; read your board manual first. |
+| C02 | Windows 11 x64, UEFI mode | `bcdedit /enum '{bootmgr}'` shows `path \EFI\Microsoft\Boot\bootmgfw.efi` (verified here); `Confirm-SecureBootUEFI` throws "Cmdlet not supported on this platform" on legacy BIOS. (The registry value `PEFirmwareType` and `$env:firmware_type` are not reliable: the first was empty on the reference PC.) | `.efi` path | The PC boots in legacy (CSM/BIOS) mode. Switch the boot mode to UEFI. Changing this can stop Windows booting; read your board manual first. |
 | C03 | **Secure Boot is OFF** | `Confirm-SecureBootUEFI` (needs admin) -> `False`. Also `msinfo32` -> "Secure Boot State: Off" | False | Secure Boot is on. The unlock program is not signed, so the firmware refuses to run it. Turn Secure Boot off in the BIOS (see TROUBLESHOOTING T03). Note: games with kernel anti-cheat (Battlefield 6, Call of Duty, Valorant, FACEIT) need Secure Boot ON. |
 | C04 | **BitLocker / device encryption is OFF and the drive fully decrypted** | `manage-bde -status C:` -> "Conversion Status: Fully Decrypted", "Protection Status: Protection Off" (verified here) | both | The drive is encrypted. Turn off BitLocker / Device encryption in Windows, wait until decryption finishes, then run again. Changing boot settings with BitLocker on can trigger the recovery-key screen. |
 | C05 | GPT system disk with an existing Windows EFI partition | `Get-Disk`, `Get-Partition` (partition type System, GPT type `{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}`) | GPT + ESP present | The disk is MBR, or Windows is not booted from a GPT/UEFI disk. Not supported. |
@@ -38,7 +38,7 @@ skip a check. "Verified here" means the command was run on the reference machine
 ## Supported target cards (from the upstream accepted-ID list)
 
 GA102: 0x2200, 0x2203, 0x2204, 0x2205, 0x2206, 0x2207, 0x2208, 0x220a, 0x220d, 0x2216, 0x222b, 0x222f.
-GA104: 0x2480, 0x2482-0x2489, 0x248a, 0x248c-0x248e, 0x249c, 0x249d, 0x249f, 0x24a0, 0x24a4, 0x24ac, 0x24ad, 0x24af, 0x24bf, 0x24c0, 0x24c7-0x24c9, 0x24dc, 0x24dd, 0x24df, 0x24e0.
+GA104: 0x2480, 0x2482, 0x2483, 0x2484, 0x2486, 0x2487, 0x2488, 0x2489, 0x248a, 0x248c, 0x248d, 0x248e, 0x249c, 0x249d, 0x249f, 0x24a0, 0x24a4, 0x24ac, 0x24ad, 0x24af, 0x24bf, 0x24c0, 0x24c7, 0x24c8, 0x24c9, 0x24dc, 0x24dd, 0x24df, 0x24e0.
 GA103 (untested): 0x2414. GA106: 0x2501, 0x2503, 0x2504, 0x2505, 0x2507, 0x2508, 0x2509, 0x252f, 0x2544.
-Source: `kernel/gpu_unlock/main.c` in Zagitta/gpu-unlock. Being on the list does not mean it works: for example RTX 3060 `10de:2544` needs an
+Source: `kernel/gpu_unlock/main.c` on the `main` branch of Zagitta/gpu-unlock (checked 2026-10-25; the older commit this fork is based on matches only the RTX 3090). Being on the list does not mean it works: for example RTX 3060 `10de:2544` needs an
 upstream fix that is not merged yet (pull request #115), and some laptop and OEM variants unlock with no speedup (issues #124, #28).

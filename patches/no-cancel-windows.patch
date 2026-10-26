@@ -41,10 +41,10 @@ index 89be7a3..d86f040 100644
 + [ordered]@{Mode='guarded-automatic-internal-unlock-then-windows';NoCancelWindows=[bool]$NoEscWindows;HardwareTested=$false;ChildSha256=$hash;ChildBytes=(Get-Item $child).Length;EfiSha256=(Get-FileHash "build/$dir/AUTO.EFI").Hash;BuiltUtc=[DateTime]::UtcNow.ToString('o');Sources=@($sources+@('prepare-console.c','prepare-console.h','full-release.h','full-flow.h','decode-policy.h','media.h',"build/$dir/child-contract.h") | ForEach-Object {[ordered]@{Path=$_;Sha256=(Get-FileHash $_).Hash}})} | ConvertTo-Json -Depth 5 | Set-Content "build/$dir/manifest.json" -Encoding utf8
  }finally {Pop-Location}
 diff --git a/internal-boot/boot/handoff.c b/internal-boot/boot/handoff.c
-index 07924d8..a71af69 100644
+index fcb32bb..6ea4dc1 100644
 --- a/internal-boot/boot/handoff.c
 +++ b/internal-boot/boot/handoff.c
-@@ -9,6 +9,8 @@
+@@ -10,6 +10,8 @@
  #include "flow.h"
  #ifdef GU_HEADLESS_RESEARCH
  #include "build/headless/child-contract.h"
@@ -53,7 +53,7 @@ index 07924d8..a71af69 100644
  #elif defined(GU_AUTOMATIC_BOOT)
  #include "build/automatic/child-contract.h"
  #else
-@@ -38,6 +40,9 @@
+@@ -39,6 +41,9 @@
  #endif
  /* Release test: the full driver release and verification, then Windows. The unlock
   * application is neither loaded nor linked; nothing is written to the card. */
@@ -63,16 +63,16 @@ index 07924d8..a71af69 100644
  #ifdef GU_RELEASE_ONLY
  #ifndef GU_FULL_UNLOCK
  #error Release-only builds extend the full flow
-@@ -277,12 +282,19 @@ static EFI_STATUS FullChoice(VOID *Context,BOOLEAN *Skip) {
-   Say(L"RTX 3060 DRIVER RELEASE TEST. NO UNLOCK, nothing is written to the card.\r\nThe 3060 display may go blank; the RTX 5070 console stays. Then Windows starts by itself.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: power off, then F11 Windows Boot Manager.\r\n");
+@@ -278,12 +283,19 @@ static EFI_STATUS FullChoice(VOID *Context,BOOLEAN *Skip) {
+   Say(GU_W(GU_TARGET_SHORT) L" DRIVER RELEASE TEST. NO UNLOCK, nothing is written to the card.\r\nThe " GU_W(GU_TARGET_DISPLAY_NUMBER) L" display may go blank; the " GU_W(GU_CONSOLE_SHORT) L" console stays. Then Windows starts by itself.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: hold the power button until the PC turns off, then power on.\r\n");
  #elif defined(GU_HEADLESS_RESEARCH)
-   Say(L"SINGLE RTX HEADLESS UNLOCK RESEARCH: one guarded attempt, then Windows.\r\nNo key required. Esc within 5 seconds skips all changes.\r\nScreen may stop updating. Errors stop without reset/retry; power off and F8 Windows Boot Manager.\r\n");
+   Say(L"SINGLE RTX HEADLESS UNLOCK RESEARCH: one guarded attempt, then Windows.\r\nNo key required. Esc within 5 seconds skips all changes.\r\nScreen may stop updating. Errors stop without reset/retry; hold the power button until the PC turns off, then power on.\r\n");
 +#elif defined(GU_AUTOMATIC_BOOT) && defined(GU_NO_ESC_WINDOWS)
-+  Say(L"Windows GPU UNLOCK AUTO (no cancel windows): one guarded unlock, then Windows.\r\nKeep the RTX 5070 display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
++  Say(L"Windows GPU UNLOCK AUTO (no cancel windows): one guarded unlock, then Windows.\r\nKeep the " GU_W(GU_CONSOLE_SHORT) L" display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
  #elif defined(GU_AUTOMATIC_BOOT)
-   Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep the RTX 5070 display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
+   Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep the " GU_W(GU_CONSOLE_SHORT) L" display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
  #else
-   Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. RTX 5070 display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
+   Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. " GU_W(GU_CONSOLE_SHORT) L" display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
  #endif
 -  for(UINTN i=0;i<50;i++) {
 +#if defined(GU_AUTOMATIC_BOOT) && defined(GU_NO_ESC_WINDOWS)
@@ -85,7 +85,7 @@ index 07924d8..a71af69 100644
      if(s==EFI_SUCCESS && (key.ScanCode==0x17 || key.UnicodeChar==27)){*Skip=TRUE;return EFI_SUCCESS;}
      if(s!=EFI_SUCCESS && s!=EFI_NOT_READY)return s;
 diff --git a/internal-boot/unlock/app.c b/internal-boot/unlock/app.c
-index a9476d9..05d9be7 100644
+index 53feeba..557e75e 100644
 --- a/internal-boot/unlock/app.c
 +++ b/internal-boot/unlock/app.c
 @@ -342,9 +342,16 @@ static EFI_STATUS Arm(VOID) {
@@ -107,7 +107,7 @@ index a9476d9..05d9be7 100644
      if(!GuHeadlessCheck())return EFI_NOT_READY;
  #endif
 diff --git a/internal-boot/unlock/build.ps1 b/internal-boot/unlock/build.ps1
-index c147868..ad28adb 100644
+index 72bb7d9..4395ea3 100644
 --- a/internal-boot/unlock/build.ps1
 +++ b/internal-boot/unlock/build.ps1
 @@ -6,6 +6,7 @@ param(
@@ -117,8 +117,8 @@ index c147868..ad28adb 100644
 + [switch]$NoEscWindows,
   [switch]$HeadlessResearch,
   [ValidateSet('original03100062','observed03000062','entryLatchedSs1Preserve','entryLatchedSs1Full')][string]$StockProfile,
-  [ValidateSet('z790-3060')][string]$HardwareProfile='z790-3060'
-@@ -28,12 +29,14 @@ try {
+  [string]$HardwareProfile='z790-3060'
+@@ -35,12 +36,14 @@ try {
   $defines=@()
   if($HeadlessResearch -and (!$AutomaticBoot -or !$InternalBoot -or !$ExperimentalUnlock -or $StockProfile -ne 'entryLatchedSs1Full')){throw 'Headless research requires automatic internal exact full profile'}
   if($hw.HeadlessOnly -and $ExperimentalUnlock -and !$HeadlessResearch){throw ('Profile '+$HardwareProfile+' only ships a headless write path; non-headless builds are diagnostic-only')}
@@ -133,7 +133,7 @@ index c147868..ad28adb 100644
   if($HeadlessResearch){$out+='/headless-research';$name+='-HEADLESS-RESEARCH';$defines+='-DGU_HEADLESS_RESEARCH'}
    if($ExperimentalUnlock){$defines+= '-DGU_EXPERIMENTAL_UNLOCK';$defines+=$(switch($StockProfile){'original03100062'{'-DGU_STOCK_PROFILE_ORIGINAL_03100062'} 'observed03000062'{'-DGU_STOCK_PROFILE_OBSERVED_03000062'} 'entryLatchedSs1Preserve'{'-DGU_ENTRY_LATCHED_SS1_PRESERVE'} 'entryLatchedSs1Full'{'-DGU_ENTRY_LATCHED_SS1_FULL'}})}
   New-Item -ItemType Directory -Path $out -Force | Out-Null
-@@ -51,7 +54,7 @@ try {
+@@ -58,7 +61,7 @@ try {
   if($LASTEXITCODE -ne 0){throw 'PE verification failed'}
   [ordered]@{BuiltUtc=[DateTime]::UtcNow.ToString('o');HardwareProfile=$hw.Name;TargetPci=$hw.TargetPci;Subsystem=$hw.Subsystem;
    Mode=$(if($HeadlessResearch){'headless-research-automatic-internal-exact-card-unlock'}elseif($AutomaticBoot){'automatic-internal-exact-card-unlock'}elseif($ExperimentalUnlock){'experimental-exact-card-manual-unlock'}else{'diagnostic-preflight-only'});

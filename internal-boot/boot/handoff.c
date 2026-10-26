@@ -5,6 +5,7 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Guid/FileInfo.h>
+#include "../unlock/machine-profile.h"
 #include "media.h"
 #include "flow.h"
 #ifdef GU_HEADLESS_RESEARCH
@@ -81,7 +82,7 @@ static VOID ScreenStatus(const char *Event,EFI_STATUS Status) {
 }
 #endif
 static VOID Stop(VOID) {
-  Say(L"\r\nHANDOFF STOPPED. No reset or automatic retry. Power off and use Windows Boot Manager for recovery.\r\n");
+  Say(L"\r\nHANDOFF STOPPED. No reset or automatic retry. Hold the power button until the PC turns off, then power on; Windows starts normally.\r\n");
   if(Table && Table->BootServices) {
     if(Table->BootServices->SetWatchdogTimer(0,0,0,NULL)!=EFI_SUCCESS)
       Say(L"WARNING: firmware watchdog could not be disabled.\r\n");
@@ -274,13 +275,13 @@ static EFI_STATUS FullChoice(VOID *Context,BOOLEAN *Skip) {
   (void)Context;*Skip=FALSE;
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
 #ifdef GU_RELEASE_ONLY
-  Say(L"RTX 3060 DRIVER RELEASE TEST. NO UNLOCK, nothing is written to the card.\r\nThe 3060 display may go blank; the RTX 5070 console stays. Then Windows starts by itself.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: power off, then F11 Windows Boot Manager.\r\n");
+  Say(GU_W(GU_TARGET_SHORT) L" DRIVER RELEASE TEST. NO UNLOCK, nothing is written to the card.\r\nThe " GU_W(GU_TARGET_DISPLAY_NUMBER) L" display may go blank; the " GU_W(GU_CONSOLE_SHORT) L" console stays. Then Windows starts by itself.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: hold the power button until the PC turns off, then power on.\r\n");
 #elif defined(GU_HEADLESS_RESEARCH)
-  Say(L"SINGLE RTX HEADLESS UNLOCK RESEARCH: one guarded attempt, then Windows.\r\nNo key required. Esc within 5 seconds skips all changes.\r\nScreen may stop updating. Errors stop without reset/retry; power off and F8 Windows Boot Manager.\r\n");
+  Say(L"SINGLE RTX HEADLESS UNLOCK RESEARCH: one guarded attempt, then Windows.\r\nNo key required. Esc within 5 seconds skips all changes.\r\nScreen may stop updating. Errors stop without reset/retry; hold the power button until the PC turns off, then power on.\r\n");
 #elif defined(GU_AUTOMATIC_BOOT)
-  Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep the RTX 5070 display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
+  Say(L"Windows GPU UNLOCK AUTO: Esc within 5 seconds boots Windows only.\r\nOtherwise one guarded unlock, then Windows. No U required.\r\nKeep the " GU_W(GU_CONSOLE_SHORT) L" display/keyboard connected. Firmware mouse/cursor may pause.\r\n");
 #else
-  Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. RTX 5070 display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
+  Say(L"GPU UNLOCK TEST: driver release + original IO/MEM restore.\r\nFirmware mouse/cursor may pause. " GU_W(GU_CONSOLE_SHORT) L" display/keyboard must remain connected.\r\nEsc within 5 seconds skips all changes. Otherwise press U later in the original unlock app.\r\n");
 #endif
   for(UINTN i=0;i<50;i++) {
     EFI_INPUT_KEY key;EFI_STATUS s=Table->ConIn->ReadKeyStroke(Table->ConIn,&key);
@@ -362,10 +363,10 @@ static EFI_STATUS PrepareChoice(VOID *Context,BOOLEAN *Skip) {
   (void)Context;*Skip=FALSE;
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
 #ifdef GU_SINGLE_RTX_CONSOLE
-  Say(L"R2 AUTO CONSOLE TEST: NO UNLOCK, NVIDIA GOP RETAINED.\r\nNo key required: console detach, state verification, then Windows.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: power off, then F8 Windows Boot Manager.\r\n");
+  Say(L"R2 AUTO CONSOLE TEST: NO UNLOCK, NVIDIA GOP RETAINED.\r\nNo key required: console detach, state verification, then Windows.\r\nEsc within 5 seconds skips all changes and starts Windows.\r\nOn failure there is no reset or retry: hold the power button until the PC turns off, then power on.\r\n");
   return GuResearchChooseInput(Table,Skip);
 #else
-  Say(L"RTX console detach TEST. No unlock. Keep the RTX 5070 display connected.\r\nPress Esc within 5 seconds to skip the test and start Windows.\r\n");
+  Say(L"RTX console detach TEST. No unlock. Keep the " GU_W(GU_CONSOLE_SHORT) L" display connected.\r\nPress Esc within 5 seconds to skip the test and start Windows.\r\n");
   for(UINTN i=0;i<50;i++) {
     EFI_INPUT_KEY key;EFI_STATUS s=Table->ConIn->ReadKeyStroke(Table->ConIn,&key);
     if(s==EFI_SUCCESS && (key.ScanCode==0x17 || key.UnicodeChar==27)){*Skip=TRUE;return EFI_SUCCESS;}

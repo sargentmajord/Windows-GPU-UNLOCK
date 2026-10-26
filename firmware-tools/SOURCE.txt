@@ -1,0 +1,15 @@
+These files are unchanged copies of the firmware tools in Zagitta/gpu-unlock (GPL-2.0-only), taken at the commit this
+project is based on:
+
+  https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956/firmware
+
+  fetch_artifacts.py          SHA-256 5655e3e497b16e17e3a9c307cf733ef2207cd7a3d0be5a9d0b2c532d66abe76b
+  generate_v67.py             SHA-256 4b41e5199c6b9968d134c43a5a42d8127d094eebfe9dca78204be4d7c8237fd0
+  extract_boot_assets.py      SHA-256 7acc5f488cd35700c499bc942a07e7d0d9b0822b1e2ad040cd34bacf99fa5986
+  artifacts-610.43.03.json    SHA-256 766be4acb90a9ce2448adc3eb4cead81ea142e96b614f30bde1600b74fe5a4bc
+  NOTICE.md, README.md        upstream provenance and license notes (read NOTICE.md: NVIDIA's firmware is not licensed by
+                              these scripts, and the generated files must not be shared)
+
+The installer (installer/Firmware.ps1) checks each script against these hashes before it runs it. Upstream's README says
+Python 3.14 is needed; at this commit the scripts instead call the `zstd` command for the .zst package, so Python 3.12 and
+zstd are enough (verified 2026-10-25 on Windows: all five generated files match internal-boot/unlock/assets.json).

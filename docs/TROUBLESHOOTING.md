@@ -8,9 +8,9 @@ Nothing here is a promise that your PC behaves the same: boards, graphics cards,
 
 - The script shrinks your C: partition by 2 GiB and creates a small separate boot partition (letter U: on the reference PC).
   It does not touch files inside C:, the Windows boot partition, your BIOS or the card's firmware.
-- It adds one boot entry and queues it for the next start only. Windows stays first in the boot order.
+- It does not change the firmware boot order and adds no boot entry of its own: it uses the "UEFI OS" entry the firmware makes for the boot partition, and queues a one-time boot for it. With the "every boot" option it also adds one Windows startup task that queues the next one-time boot.
 - Secure Boot has to be OFF while you use this (T03). That is a security setting; see T04 for games.
-- An undo script removes the boot entry, the partition and the files.
+- Roll back removes the startup task, any queued boot, the files and (if you agree) the partition.
 
 ## Settings that must be right
 
@@ -56,16 +56,15 @@ numbers first. If you cannot see the BIOS: unplug the display from the target ca
 instead of a restart if that helps. Swapping the cards between slots may change it; check your board manual first.
 
 **T12: black screen for up to a minute or two during a test.** Normal while the target card's display driver is released. If the screen is
-still black after about 5 minutes, hold the power button until the PC turns off, wait 10 seconds, turn it on. Each test runs once, so
-Windows boots normally the next time. If Windows still does not appear, open the one-time boot menu and choose "Windows Boot Manager".
+still black after about 5 minutes, hold the power button until the PC turns off, wait 10 seconds, turn it on. Each queued boot runs once and is used up
+when it starts, so Windows boots normally the next time. You do not need the BIOS or a boot menu for this (on a PC whose monitor is on the other card you may not be able to see them at all).
 
 **T13: nothing happened (the test did not run).** A start that fails for any reason (for example an unexpected trip into the BIOS) can clear the queued one-time boot, so queue it again. On the reference MSI board the boot entry made with `bcdedit` was never listed in
 the firmware's boot menu and was silently skipped. A copy of the program at `\EFI\BOOT\BOOTX64.EFI` on the boot partition made the firmware
 list it as a normal "UEFI OS" entry, and that entry then ran. The script uses that fallback when needed and checks which entry the firmware
 actually started (`BootCurrent`) instead of trusting that the entry ran.
 
-**T14: the one-time boot key differs by board.** MSI: F11 (it worked on the reference PC). The original project's guide used F8 on its ASUS boards. For other
-boards read the key on the start-up screen or in the board manual; the script cannot know it.
+**T14: you cannot see the BIOS or the boot menu.** The installer never needs them for the unlock or for recovery (see T11 for why the screen can be on the other card). The firmware's boot order is not reliable here: on the reference board an order set from Windows was back to "Windows first" after a cold boot, so the installer only uses the one-time boot queue, which did survive cold boots.
 
 ## Start-up and restart problems
 
@@ -74,9 +73,8 @@ sleep invalidates the unlock with no resume path on the Windows port ([the origi
 Windows restart resets the card ([#10](https://github.com/impacifist/Windows-GPU-UNLOCK/issues/10)). Treat sleep and hibernate as "unlock lost; restart".
 
 **T22: the program froze at start-up (black screen, no Windows).** The program stops on purpose, without resetting, when one of its safety
-checks fails after it has already let go of the card's display driver. Power off with the button, wait 10 seconds, power on; use the boot menu
-to pick "Windows Boot Manager" if needed. Never leave the program first in the firmware boot order: some firmware reorders entries by itself after
-a start. The script keeps Windows first and checks it after every step.
+checks fails after it has already let go of the card's display driver. Power off with the button, wait 10 seconds, power on. The queued boot was used up when it started, so Windows starts normally.
+The "every boot" startup task then does not queue another one until a run has finished cleanly (it writes the reason to `C:\ProgramData\WindowsGPUUnlock\arm.log`). The installer never changes the firmware boot order.
 
 ## Card and driver problems
 
@@ -126,7 +124,7 @@ when calling `wsl`; `Get-PartitionSupportedSize` and `Confirm-SecureBootUEFI` ne
 
 ## Remote use
 
-**T50: you need to be at the PC.** Entering the BIOS, choosing a boot entry and fixing a failed start need a keyboard and screen on the PC.
+**T50: you need to be at the PC.** Turning Secure Boot off in the BIOS and fixing a failed start (holding the power button) need someone at the PC.
 Remote tools often cannot answer Windows' administrator permission prompt, and the remote session is lost whenever the PC restarts or hangs.
 
 ## Getting help

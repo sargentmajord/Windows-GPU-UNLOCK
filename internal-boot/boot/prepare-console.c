@@ -58,8 +58,8 @@ static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOC
 static EFI_GUID GopGuid=EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID,TextGuid=EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID;
 static EFI_GUID InputGuid=EFI_SIMPLE_TEXT_INPUT_PROTOCOL_GUID;
 static EFI_GUID BindingGuid=EFI_DRIVER_BINDING_PROTOCOL_GUID,ImageGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID;
-static const EFI_GUID OutFile={0x628a497d,0x2bf6,0x4264,{0x87,0x41,0x06,0x9d,0xbd,0x33,0x99,0xd6}};
-static const EFI_GUID GfxFile={0x43e7abdd,0xe352,0x4cfb,{0xa2,0x30,0x4c,0xdc,0x1d,0x35,0x0e,0x5c}};
+static const EFI_GUID OutFile=GU_CONSOLE_TEXT_FILE_GUID;
+static const EFI_GUID GfxFile=GU_CONSOLE_GFX_FILE_GUID;
 #if GU_CONSOLE_AGGREGATE
 static EFI_GUID EdidFoundGuid=EFI_EDID_DISCOVERED_PROTOCOL_GUID;
 static const EFI_GUID EdidFile={0xc7a7030c,0xc3d8,0x45ee,{0xbe,0xd9,0x5d,0x9e,0x76,0x76,0x29,0x53}};
@@ -202,7 +202,7 @@ static EFI_STATUS Displays(EFI_SYSTEM_TABLE *t,PLAN *p,BOOLEAN first) {
 #endif
     } else if(DisplayRoute(path,RtxPath) && !rtx) {
       rtx=handles[i];UINT32 cfg[16];EFI_HANDLE h=NULL;EFI_PCI_IO_PROTOCOL *io=NULL;
-      s=PciFor(bs,path,1,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&h,&io,cfg);
+      s=PciFor(bs,path,GU_TARGET_BUS,GU_BOARD_ID,GU_BOARD_SUBSYSTEM,&h,&io,cfg);
       if(s!=EFI_SUCCESS)break;
       if(first){p->RtxPci=h;p->RtxIo=io;for(UINTN j=0;j<16;j++)p->RtxConfig[j]=cfg[j];for(UINTN j=0;j<36;j++)p->RtxDisplayPath[j]=((UINT8 *)path)[j];}
       else if(p->RtxPci!=h || p->RtxIo!=io || !Bytes(cfg,p->RtxConfig,sizeof(cfg)) || !PathMatches(path,p->RtxDisplayPath))s=EFI_NOT_READY;
@@ -428,7 +428,7 @@ EFI_STATUS GuPrepareConsole(EFI_SYSTEM_TABLE *t,GU_PREPARE_LOG log,VOID *context
     if(s!=EFI_SUCCESS || recorded!=EFI_SUCCESS)return s==EFI_SUCCESS?recorded:s;
 #ifndef GU_SINGLE_RTX_CONSOLE
     /* Active output test uses the already preserved console-adapter-backed console. */
-    s=t->ConOut->OutputString(t->ConOut,L"RTX 3060 console consumer detached; RTX 5070 console retained.\r\n");
+    s=t->ConOut->OutputString(t->ConOut,GU_W(GU_TARGET_SHORT) L" console consumer detached; " GU_W(GU_CONSOLE_SHORT) L" console retained.\r\n");
     if(s!=EFI_SUCCESS)return s;
 #endif
   }
