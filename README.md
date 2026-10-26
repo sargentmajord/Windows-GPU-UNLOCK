@@ -5,7 +5,25 @@ port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a s
 speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork adds a guided, self-service installer
 (text and graphical) with roll back, update-in-place and a full test suite, built and verified on one documented machine.
 
-**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: only one machine is known to get all the way through it** — see what that means for other hardware right below. Everything below describes that machine unless noted otherwise.
+**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: only one machine is known to get all the way through it** — see what that means for other hardware in [What has been verified](#what-has-been-verified-one-machine-2026-10-25) below. Everything below describes that machine unless noted otherwise.
+
+## Read this before trying anything
+
+- **No warranty.** This writes to GPU registers before Windows starts. It is unofficial, unsupported by NVIDIA and may void a warranty.
+  Use a card you can afford to lose, and know the recovery: if a start freezes, hold the power button and power on again (Windows then starts normally). Nothing here flashes the video BIOS; the unlock is lost at every
+  power-off and applied again each boot.
+- **Requirements:** Windows 11 x64 in UEFI mode, Secure Boot **off**, BitLocker off, Windows Fast Startup off (for automatic mode), a second
+  graphics adapter that keeps the screen working, and a display attached to the target card. Games with anti-cheat that requires Secure Boot
+  will not run with it off. See [docs/CHECKS.md](docs/CHECKS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+- **Not included:** NVIDIA firmware, video BIOS images and drivers are never redistributed. Firmware files are generated locally
+  ([docs/ASSETS.en.md](docs/ASSETS.en.md)).
+- **The scripts are not digitally signed.** Check the download first (`SHA256SUMS`, and `gh attestation verify` if you use the GitHub CLI — see
+  the release page). Windows may mark a downloaded zip and what you extract from it as coming from the internet and show a warning when you
+  open `Install-GpuUnlock.cmd`; read the scripts if you want to, then choose to run it. `Install-GpuUnlock.cmd` starts the installer with the
+  PowerShell execution policy bypassed for that one run only and changes no system setting. If you prefer, right-click the extracted `.ps1`
+  and `.cmd` files, open Properties and tick Unblock, or run `Unblock-File` on them. Only do that after you have checked the file and where
+  it came from. A checksum file and an attestation are not the same thing as code signing: they show the archive is the one this project
+  built, not that Windows trusts the publisher.
 
 ## What has been verified (one machine, 2026-10-25)
 
@@ -16,12 +34,9 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   returned to Windows.
 - Matrix-multiply benchmark (4096x4096, median of three, driver 617.42): FP16 tensor 26.51 -> 48.13 TFLOPS (+81.6%), BF16 tensor
   26.40 -> 50.34 TFLOPS (+90.7%), FP32 unchanged (8.20 -> 8.18). A five-minute sustained run stayed within about 3% of those values.
-- **Reproduced a day later, plus two things newly confirmed (2026-10-26):** the benchmark above again (FP16 26.34 -> 47.94 TFLOPS, consistent
-  within normal variance), and that a normal Windows **Restart** (not just a full power-off) resets the card back to locked - both the locked
-  and unlocked state were confirmed independently (register readout and ratio match), not just assumed. Also measured, for the first time, how
-  much of that raw gain reaches real local LLM inference on the same card: prompt processing (prefill) gained +3.2% to +7.6% depending on
-  prompt length; token generation (decode) showed no measurable change. Full numbers and why real-world gains are so much smaller than the raw
-  TFLOPS figure: [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md#locked-vs-unlocked-reproduced-a-day-later-2026-10-26).
+- **Reproduced a day later (2026-10-26), plus two new findings:** a normal Windows Restart confirmed to reset the card back to locked, and a
+  first measurement of how much of the raw tensor-math gain reaches real local LLM inference (prefill +3.2% to +7.6%, decode unchanged). Full
+  numbers: see the [Changelog](#changelog) below or [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md#locked-vs-unlocked-reproduced-a-day-later-2026-10-26).
 - **Not verified:** other cards, boards, firmware versions or operating systems; sleep; the automatic (no keypress) mode beyond one boot; the guided installer on any other PC; the no-cancel extra on hardware; a real run of the optional automatic mode through the installer (requirements: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
 - **Other cards and PCs are refused, not guessed.** The installer builds its boot programs from a read-only capture of your own PC, runs every check again at boot, and runs host tests
   against your own capture before anything is put on the boot partition. Some of those tests still contain the reference card's own expectations (the size and offsets of its video BIOS
@@ -30,6 +45,19 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 - Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation) - and real-world gains are well below the raw
   TFLOPS number, since actual workloads mix in memory-bound work the unlock doesn't touch; measured real local LLM prefill gained +3-8%, not
   +82%. Games, FP32 work and memory-bound work (including LLM token generation/decode) do not speed up at all.
+
+## Where things are
+
+| Path | Purpose |
+|---|---|
+| [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md) | how to use the installer, step by step, and how Roll back works |
+| [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md) | the reference machine and its measured results |
+| [docs/CHECKS.md](docs/CHECKS.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | pre-flight checks and fixes |
+| [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md) | requirements the installer is built to |
+| [docs/AUDIT-2026-10-25.md](docs/AUDIT-2026-10-25.md) | what was checked before the first hardware step |
+| `internal-boot/` | the boot programs, build and staging scripts, host tests |
+| `patches/` | optional patches, including one that removes the automatic mode's Esc cancel windows (with disclaimer) |
+| `benchmark/` | the before/after benchmark |
 
 ## Changelog
 
@@ -283,37 +311,6 @@ This is where this fork's history begins: based on an existing public release by
 hardware-check logic (card identity, memory layout) adapted, a safe read-only mode added by default, and the
 project's own test suite built out alongside it from the very start. No proprietary files (firmware, drivers,
 private paths) have ever been included in any public release of this project, from this very first entry onward.
-
-## Read this before trying anything
-
-- **No warranty.** This writes to GPU registers before Windows starts. It is unofficial, unsupported by NVIDIA and may void a warranty.
-  Use a card you can afford to lose, and know the recovery: if a start freezes, hold the power button and power on again (Windows then starts normally). Nothing here flashes the video BIOS; the unlock is lost at every
-  power-off and applied again each boot.
-- **Requirements:** Windows 11 x64 in UEFI mode, Secure Boot **off**, BitLocker off, Windows Fast Startup off (for automatic mode), a second
-  graphics adapter that keeps the screen working, and a display attached to the target card. Games with anti-cheat that requires Secure Boot
-  will not run with it off. See [docs/CHECKS.md](docs/CHECKS.md) and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-- **Not included:** NVIDIA firmware, video BIOS images and drivers are never redistributed. Firmware files are generated locally
-  ([docs/ASSETS.en.md](docs/ASSETS.en.md)).
-- **The scripts are not digitally signed.** Check the download first (`SHA256SUMS`, and `gh attestation verify` if you use the GitHub CLI — see
-  the release page). Windows may mark a downloaded zip and what you extract from it as coming from the internet and show a warning when you
-  open `Install-GpuUnlock.cmd`; read the scripts if you want to, then choose to run it. `Install-GpuUnlock.cmd` starts the installer with the
-  PowerShell execution policy bypassed for that one run only and changes no system setting. If you prefer, right-click the extracted `.ps1`
-  and `.cmd` files, open Properties and tick Unblock, or run `Unblock-File` on them. Only do that after you have checked the file and where
-  it came from. A checksum file and an attestation are not the same thing as code signing: they show the archive is the one this project
-  built, not that Windows trusts the publisher.
-
-## Where things are
-
-| Path | Purpose |
-|---|---|
-| [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md) | how to use the installer, step by step, and how Roll back works |
-| [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md) | the reference machine and its measured results |
-| [docs/CHECKS.md](docs/CHECKS.md), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | pre-flight checks and fixes |
-| [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md) | requirements the installer is built to |
-| [docs/AUDIT-2026-10-25.md](docs/AUDIT-2026-10-25.md) | what was checked before the first hardware step |
-| `internal-boot/` | the boot programs, build and staging scripts, host tests |
-| `patches/` | optional patches, including one that removes the automatic mode's Esc cancel windows (with disclaimer) |
-| `benchmark/` | the before/after benchmark |
 
 ## License and attribution
 
