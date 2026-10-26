@@ -136,8 +136,28 @@ function Test-C13PendingBoot {
  else{New-Result C13 'No one-time boot is queued' Pass 'Nothing is queued.'}
 }
 
+# Only meaningful for a real release download (a VERSION file is written into the archive at build time,
+# see .github/workflows/release.yml); running from a plain git checkout has nothing to compare, so it passes
+# quietly. Never blocks and never fails the install - no internet, or GitHub not answering, just skips it.
+function Get-SysInstalledVersion {
+ $p = Join-Path (Get-SysInstallerRoot) 'VERSION'
+ if (Test-Path -LiteralPath $p) { (Get-Content -LiteralPath $p -Raw).Trim() } else { $null }
+}
+function Get-SysLatestReleaseTag {
+ try { (Invoke-RestMethod -Uri 'https://api.github.com/repos/sargentmajord/Windows-GPU-UNLOCK/releases/latest' -TimeoutSec 5 -Headers @{ 'User-Agent' = 'Windows-GPU-UNLOCK-Installer' }).tag_name }
+ catch { $null }
+}
+function Test-C16ReleaseVersion {
+ $cur = Get-SysInstalledVersion
+ if (-not $cur) { return New-Result C16 'This is the latest release' Pass 'Running from a checkout, not a release download; nothing to compare.' }
+ $latest = Get-SysLatestReleaseTag
+ if (-not $latest) { return New-Result C16 'This is the latest release' Pass "Running $cur. Could not check for a newer release just now (no internet, or GitHub did not answer)." }
+ if ($latest -eq $cur) { return New-Result C16 'This is the latest release' Pass "Running $cur, the latest release." }
+ New-Result C16 'This is the latest release' Info "Running $cur; the latest published release is $latest. See https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest"
+}
+
 function Invoke-AllChecks {
- $names='Test-C01Admin','Test-C02Uefi','Test-C03SecureBoot','Test-C04BitLocker','Test-C05Gpt','Test-C06BootPartition','Test-C07Cards','Test-C08Desktop','Test-C09SecondAdapter','Test-C11FastStartup','Test-C13PendingBoot','Test-C15PathLength'
+ $names='Test-C01Admin','Test-C02Uefi','Test-C03SecureBoot','Test-C04BitLocker','Test-C05Gpt','Test-C06BootPartition','Test-C07Cards','Test-C08Desktop','Test-C09SecondAdapter','Test-C11FastStartup','Test-C13PendingBoot','Test-C15PathLength','Test-C16ReleaseVersion'
  foreach($n in $names){
   try{& $n}catch{New-Result ($n -replace '^Test-(C\d\d).*','$1') $n Unknown ("The check could not run: "+$_.Exception.Message)}
  }

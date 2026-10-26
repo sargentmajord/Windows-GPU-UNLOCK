@@ -38,8 +38,10 @@ if($Mode -ne 'Status' -and (Test-Path -LiteralPath $root -ErrorAction SilentlyCo
 
 if($Mode -eq 'Status'){
  $s=ReadState;$task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+ $notifyTask=Get-ScheduledTask -TaskName 'WindowsGPUUnlock-NotifyStuck' -ErrorAction SilentlyContinue
  Write-Output ("Mode recorded: {0}" -f $(if($s){$s.Mode}else{'never set'}))
  Write-Output ("Startup task: {0}" -f $(if($task){'present'}else{'absent'}))
+ Write-Output ("Stuck-notification task: {0}" -f $(if($notifyTask){'present'}else{'absent'}))
  Write-Output ("Fast Startup (HiberbootEnabled): {0}" -f (ReadHiber).Value)
  Write-Output ((Bcd @('/enum','{fwbootmgr}')) -split "`r?`n" | Select-String 'bootsequence|displayorder' | ForEach-Object Line)
  $log=Join-Path $root 'arm.log';if(Test-Path -LiteralPath $log){Write-Output 'Last arm.log lines:';Get-Content -LiteralPath $log -Tail 5}
@@ -49,6 +51,12 @@ if($Mode -eq 'Status'){
 if($Mode -eq 'Off'){
  $s=ReadState
  Act "unregister task $taskName" {if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){Unregister-ScheduledTask -TaskName $taskName -Confirm:$false}}
+ Act 'unregister the stuck-notification task and protocol, if set up' {
+  $notifyTaskName='WindowsGPUUnlock-NotifyStuck'
+  if(Get-ScheduledTask -TaskName $notifyTaskName -ErrorAction SilentlyContinue){Unregister-ScheduledTask -TaskName $notifyTaskName -Confirm:$false}
+  $key='HKCU:\Software\Classes\gpuunlock-action'
+  if(Test-Path -LiteralPath $key){Remove-Item -LiteralPath $key -Recurse -Force}
+ }
  Act 'delete any queued one-time boot' {try{[void](Bcd @('/deletevalue','{fwbootmgr}','bootsequence'))}catch{Write-Output 'No queued boot to remove.'}}
  if($s -and $s.HiberbootBefore){
   $h=$s.HiberbootBefore
@@ -129,6 +137,33 @@ try{
   [void](Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force)
  }
  Act 'run the arm step once now (same code the startup task runs)' {& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $armScript;if($LASTEXITCODE -ne 0){throw 'Arm step failed; see arm.log'}}
+ # If the startup task's circuit breaker ever stops queuing (a real freeze, a power loss, or a test can all
+ # cause this), nothing would otherwise tell the signed-in user - they would just find it had silently stopped.
+ # This deploys a second, LOGON-triggered task that runs as the current interactive user (not SYSTEM, which
+ # cannot show UI to a desktop session) and shows a notification with a self-service repair. Self-contained:
+ # both deployed scripts only ever touch $root and the registry, never the original install location.
+ $notifyTaskName='WindowsGPUUnlock-NotifyStuck'
+ $notifyScript=Join-Path $root 'Notify-EveryBootStuck.ps1'
+ $handlerScript=Join-Path $root 'Handle-NotifyAction.ps1'
+ Act "write $notifyScript and $handlerScript (checked afterwards: only administrators and SYSTEM may change them)" {
+  Write-SecureFile $notifyScript (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Notify-EveryBootStuck.ps1') -Raw) ([Text.UTF8Encoding]::new($true))
+  Write-SecureFile $handlerScript (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Handle-NotifyAction.ps1') -Raw) ([Text.UTF8Encoding]::new($true))
+ }
+ Act "register the gpuunlock-action protocol (so clicking a notification button runs $handlerScript)" {
+  $key='HKCU:\Software\Classes\gpuunlock-action'
+  [void](New-Item -Path $key -Force)
+  Set-ItemProperty -LiteralPath $key -Name '(default)' -Value 'URL:GPU Unlock Notification Action'
+  Set-ItemProperty -LiteralPath $key -Name 'URL Protocol' -Value ''
+  [void](New-Item -Path "$key\shell\open\command" -Force)
+  Set-ItemProperty -LiteralPath "$key\shell\open\command" -Name '(default)' -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$handlerScript`" -Uri `"%1`""
+ }
+ Act "register notification task $notifyTaskName (runs as $env:USERNAME at logon, so it can show you a notification)" {
+  $naction=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$notifyScript`""
+  $ntrigger=New-ScheduledTaskTrigger -AtLogOn
+  $nprincipal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+  $nsettings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+  [void](Register-ScheduledTask -TaskName $notifyTaskName -Action $naction -Trigger $ntrigger -Principal $nprincipal -Settings $nsettings -Force)
+ }
 }else{
  Act "queue one unlock for the next boot ($EntryId)" {[void](Bcd @('/set','{fwbootmgr}','bootsequence',$EntryId))}
 }

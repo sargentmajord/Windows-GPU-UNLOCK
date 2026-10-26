@@ -1,5 +1,28 @@
 # Changes
 
+## 2026-10-26 - a notification for the stuck circuit breaker, and a release-freshness check
+
+- **Every-boot mode now tells you, not just the status screen.** The startup task's circuit breaker (see
+  below) only shows up if you reopen the installer. Added a second, logon-triggered task that runs as the
+  signed-in user (not SYSTEM, which cannot show UI to a desktop session) and shows a Windows notification
+  the moment it's stuck, with three choices: Repair (clears it, queues normally again from the next start),
+  Ignore (dismiss, asks again next logon if still stuck), or "No, turn it off" (disables every-boot mode;
+  run the installer again to turn it back on). Each choice is handled by a small, self-contained script
+  registered against a dedicated URI, so it works even if the original installer download is long gone.
+  Privileged actions (Repair, No) prompt for administrator approval the same way the Start-menu shortcut
+  already does - nothing happens silently.
+- **The installer now checks whether you're running the latest release** (its own check, C16): a VERSION
+  file is stamped into the archive at build time; the installer compares it against GitHub's actual latest
+  release tag. Never blocks, never fails - no internet or GitHub not answering just skips it quietly, and
+  running from a plain checkout (not a release download) has nothing to compare, so it also passes quietly.
+  When out of date, it names both versions and links straight to the releases page.
+- Every release's GitHub page now gets a real changelog (the top CHANGES.md entry) instead of a bare
+  compare link; fixed on the existing v1.0.0 release too.
+- Tests: 5 new release-version checks, plus the notification machinery itself (not unit-testable - it needs
+  a real logon session, a real toast, and a real administrator prompt; verified by hand instead: the exact
+  stuck-detection logic it reuses is already covered, and the real GitHub API call was confirmed working
+  against the live repo). Installer total 1158 checks.
+
 ## 2026-10-26 - every-boot mode's circuit breaker is now visible and repairable
 
 - Found on the reference machine: when every-boot mode's startup task queues an unlock and that run leaves no

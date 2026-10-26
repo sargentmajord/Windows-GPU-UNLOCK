@@ -77,4 +77,20 @@ Expect 'a 101 character folder path fails' $c15.Status 'Fail'
 Expect 'the fix names a short folder' ($c15.Fix -like '*C:\GpuUnlock*') $true
 Expect 'the detail says how long it is' ($c15.Detail -like '*101 characters*') $true
 Expect 'the real installer folder is measured' ((Get-Command Get-SysInstallerRoot).ScriptBlock.ToString().Length -gt 0) $true
+
+# C16: is this the latest release (only meaningful for a real release download, never blocks, never fails)
+$c16Root = Join-Path ([IO.Path]::GetTempPath()) ('gpuunlock-c16-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+[void](New-Item -ItemType Directory -Path $c16Root -Force)
+try {
+ function Get-SysInstallerRoot { $script:c16Root }
+ function Get-SysLatestReleaseTag { 'v9.9.9' }
+ Expect 'no VERSION file (a checkout, not a release): passes, nothing to compare' (Test-C16ReleaseVersion).Status 'Pass'
+ Set-Content -LiteralPath (Join-Path $c16Root 'VERSION') 'v1.0.0' -NoNewline
+ Expect 'an older version than the latest release: info, never a failure' (Test-C16ReleaseVersion).Status 'Info'
+ Expect 'the info names both versions and a link' ((Test-C16ReleaseVersion).Detail -like '*v1.0.0*' -and (Test-C16ReleaseVersion).Detail -like '*v9.9.9*' -and (Test-C16ReleaseVersion).Detail -like '*releases/latest*') $true
+ function Get-SysLatestReleaseTag { 'v1.0.0' }
+ Expect 'the current version matches the latest release: passes' (Test-C16ReleaseVersion).Status 'Pass'
+ function Get-SysLatestReleaseTag { $null }
+ Expect 'no internet or GitHub did not answer: passes, never blocks' (Test-C16ReleaseVersion).Status 'Pass'
+} finally { Remove-Item -LiteralPath $c16Root -Recurse -Force -ErrorAction SilentlyContinue }
 if ($fail) { Write-Host "$fail test(s) failed" -ForegroundColor Red; exit 1 } else { Write-Host 'all tests passed' }

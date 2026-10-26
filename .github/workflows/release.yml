@@ -41,6 +41,9 @@ jobs:
           foreach ($item in $include) {
             if (Test-Path $item) { Copy-Item -Recurse -Force $item "$staging/$item" }
           }
+          # So the installer's own "is this the latest release" check (Checks.ps1, requirement: don't let
+          # people run a stale release unknowingly) has something to compare against.
+          $env:GITHUB_REF_NAME | Out-File -Encoding utf8 -NoNewline "$staging/VERSION"
           # Strip anything private that may exist locally even though it is gitignored.
           Get-ChildItem -Recurse -Path $staging -Include 'platform-config.h','local-config.json','*.bin','*.BIN' -ErrorAction SilentlyContinue |
             Remove-Item -Force
@@ -70,10 +73,24 @@ jobs:
         with:
           subject-path: ${{ env.ARCHIVE_NAME }}
 
+      - name: Build real release notes from CHANGES.md
+        shell: pwsh
+        run: |
+          # The top entry (everything from the first "## " heading to the next one) as the body,
+          # so every release reads like what actually changed instead of a bare compare link.
+          $lines = Get-Content CHANGES.md
+          $starts = (0..($lines.Count - 1)) | Where-Object { $lines[$_] -match '^## ' }
+          if ($starts.Count -ge 2) { $top = $lines[$starts[0]..($starts[1] - 1)] }
+          elseif ($starts.Count -eq 1) { $top = $lines[$starts[0]..($lines.Count - 1)] }
+          else { $top = @() }
+          $top | Out-File -Encoding utf8 RELEASE-NOTES.md
+
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ env.ARCHIVE_NAME }}
             SHA256SUMS
+          body_path: RELEASE-NOTES.md
+          append_body: true
           generate_release_notes: true

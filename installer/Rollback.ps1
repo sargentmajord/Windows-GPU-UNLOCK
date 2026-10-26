@@ -91,7 +91,7 @@ function Undo-EveryBoot($State, $Entries, [switch]$DryRun) {
  try { [void](Disable-EveryBoot); Add-RollbackResult 'startup task (unlock at every start)' 'Removed' 'Fast Startup put back to the value it had before the installer' }
  catch { Add-RollbackResult 'startup task (unlock at every start)' 'Left' $_.Exception.Message; return }
  $root = Get-DataRoot
- foreach ($n in 'Arm-NextBoot.ps1', 'unlock-schedule-state.json') {
+ foreach ($n in 'Arm-NextBoot.ps1', 'unlock-schedule-state.json', 'Notify-EveryBootStuck.ps1', 'Handle-NotifyAction.ps1') {
   $p = Join-Path $root $n
   if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; Add-RollbackResult ('startup file ' + $n) 'Removed' }
  }
