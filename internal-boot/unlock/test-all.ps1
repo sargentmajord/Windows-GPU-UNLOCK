@@ -45,7 +45,8 @@ try {
   @{Name='preflight';Sources=@('tests/test_preflight.c','app.c','app_io.c','ownership.c','format.c','sha256.c','checks.c')+$core;Defines=$defs;Args=@($Prom,$Capture)},
   @{Name='write-lock';Sources=@('tests/test_preflight_lock.c','port.c');Defines=@();Args=@()},
   @{Name='master-attributes';Sources=@('tests/test_master_attributes.c')+$core;Defines=$defs+@('-DGU_HOST_WRITE_TEST');Args=@()},
-  @{Name='runtime';Sources=@('tests/test_runtime.c','format.c',"$out/runtime-host.obj");Defines=@('-fno-builtin');Args=@()}
+  @{Name='runtime';Sources=@('tests/test_runtime.c','format.c',"$out/runtime-host.obj");Defines=@('-fno-builtin');Args=@()},
+  @{Name='fwsec-generalizes';Sources=@('tests/test_fwsec_generalizes.c','vendor/vbios_610.c');Defines=$defs+@('-Itests/transaction_shim');Args=@()}
  )
  foreach($profile in $profiles) {
   $profileDefs=@('-DGU_EXPERIMENTAL_UNLOCK',(ProfileDefine $profile))

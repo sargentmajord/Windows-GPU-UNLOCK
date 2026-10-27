@@ -1,5 +1,33 @@
 # Changes
 
+## 2026-10-26 - generalized the last hardcoded reference-card assumption in the host tests
+
+- `tests/test_efi_transaction.c`'s `check_fwsec_image()` asserted that any real firmware capture
+  it parsed must equal this machine's exact numbers (`image_size==0xed00 && dmem_size==0x980`) -
+  the one remaining hardcoded assumption flagged in an earlier entry as blocking other cards from
+  passing. Replaced with self-consistency checks (sizes are positive, in-bounds, and the DMA
+  rounding from upstream pull request #115 rounds up by less than one block and still fits the
+  on-chip buffer) that hold for any real card's firmware, not just this one. A fixed-size local
+  buffer sized to this card's exact image (`UINT8 expected[0xed00]`) became a buffer sized from the
+  parsed image itself, with an added bounds check that the image's offset and size both stay
+  inside the captured data before anything is copied.
+- New `tests/test_fwsec_generalizes.c`: proves those checks hold for firmware shapes that are not
+  this card at all - a synthetic fixture already used elsewhere in the test suite, and a second
+  copy with its DMEM size mutated to a different, non-reference misalignment (not the same 0x980
+  case) - so the generalization isn't just unverified assertion, it's demonstrated against two
+  independent shapes with no real hardware involved. Added to the main host test run
+  (`test-all.ps1`) so it runs automatically from now on.
+- Confirmed with a fresh real capture from the reference machine the same evening (a new
+  diagnostic boot, not reused old data): rebuilt the real experimental EFI image from the repo's
+  committed reference profile and ran the complete host test suite against it - all 12 groups
+  pass (`AllPassed: true`, `ExperimentalComplete: true`), including the generalized check against
+  this fresh real PROM and the new synthetic proof. Zero regression on the one card this has
+  always been verified on.
+- Real-hardware confirmation on a genuinely different card still depends on someone with that
+  hardware running the installer and reporting back - see the ask already in
+  [impacifist/Windows-GPU-UNLOCK#41](https://github.com/impacifist/Windows-GPU-UNLOCK/issues/41).
+  This change removes the known blocker; it doesn't yet prove any specific other card works.
+
 ## 2026-10-26 - the full changelog now lives in the README too
 
 The README only had a two-entry preview linking out to this file. Readers land on the README first and shouldn't

@@ -134,16 +134,22 @@ static VOID check_fwsec_image(void) {
 #ifdef GU_EXPERIMENTAL_UNLOCK
   struct gpu_unlock_fwsec fw;UINT32 sig_at;
   CHECK(!gpu_unlock_vbios_fwsec(prom,sizeof(prom),&fw));
-  /* This card's video BIOS: image 0xed00, DMEM 0x980 (not a multiple of 256), loaded as 0xa00. */
+  /* Self-consistency checks, not pinned to one card's exact numbers: whatever real firmware
+   * this capture holds, the image must be a real, in-bounds region, and the DMA rounding
+   * (upstream pull request #115: Falcon DMA moves 256-byte blocks, so an unaligned DMEM size
+   * must round up, not truncate) must round up by less than one block and still fit the
+   * on-chip DMEM buffer, whether or not this card's own DMEM size needed rounding at all. */
   UINT32 dmem_dma;
-  CHECK(fw.image_size==0xed00 && fw.dmem_size==0x980);
-  dmem_dma=(fw.dmem_size+255u)&~255u;CHECK(dmem_dma==0xa00 && dmem_dma<=sizeof(gsp_dmem));
+  CHECK(fw.image_size>0 && fw.image_off<=sizeof(prom) && fw.image_size<=sizeof(prom)-fw.image_off);
+  CHECK(fw.dmem_size>0 && fw.dmem_size<=fw.image_size);
+  dmem_dma=(fw.dmem_size+255u)&~255u;
+  CHECK(dmem_dma>=fw.dmem_size && dmem_dma-fw.dmem_size<256 && dmem_dma<=sizeof(gsp_dmem));
   CHECK(!gpu_unlock_fwsec_sig_offset(fw.sig_versions,2,384,&sig_at));
   UINT64 last_source=((UINT64)registers[(GSP+0x110)/4]<<8)|((UINT64)registers[(GSP+0x128)/4]<<40);
   UINT8 *image=dma_pointer(last_source-fw.data_off,fw.image_size);
   CHECK(!memcmp(gsp_dmem,image+fw.data_off,dmem_dma));
   CHECK(!memcmp(gsp_dmem+fw.pkc_off,prom+fw.sig_off+sig_at,384));
-  UINT8 expected[0xed00];memcpy(expected,prom+fw.image_off,sizeof(expected));
+  static UINT8 expected[sizeof(prom)];memcpy(expected,prom+fw.image_off,fw.image_size);
   CHECK(!gpu_unlock_fwsec_patch_frts(expected,&fw,PROFILE_FB_TOP-0x200000ULL));
   memcpy(expected+fw.data_off+fw.pkc_off,prom+fw.sig_off+sig_at,384);
   CHECK(!memcmp(gsp_dmem,expected+fw.data_off,dmem_dma));

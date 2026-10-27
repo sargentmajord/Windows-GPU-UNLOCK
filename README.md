@@ -39,9 +39,10 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
   numbers: see the [Changelog](#changelog) below or [docs/PROFILE-Z790-3060.en.md](docs/PROFILE-Z790-3060.en.md#locked-vs-unlocked-reproduced-a-day-later-2026-10-26).
 - **Not verified:** other cards, boards, firmware versions or operating systems; sleep; the automatic (no keypress) mode beyond one boot; the guided installer on any other PC; the no-cancel extra on hardware; a real run of the optional automatic mode through the installer (requirements: [docs/UNIVERSAL-INSTALLER-PLAN.md](docs/UNIVERSAL-INSTALLER-PLAN.md)).
 - **Other cards and PCs are refused, not guessed.** The installer builds its boot programs from a read-only capture of your own PC, runs every check again at boot, and runs host tests
-  against your own capture before anything is put on the boot partition. Some of those tests still contain the reference card's own expectations (the size and offsets of its video BIOS
-  firmware part). They pass for the reference RTX 3060; on a different card they may fail, and then the installer stops and writes a report instead of continuing. That is the safe direction,
-  but it means only the reference machine is known to get all the way through; reports from other PCs are how this gets generalized.
+  against your own capture before anything is put on the boot partition. As of 2026-10-26 the host tests no longer assume the reference card's own exact firmware numbers - they check that
+  whatever your card's capture contains is internally consistent, proven against firmware shapes that aren't the reference card at all. That removes the known blocker, but it doesn't yet
+  prove any *specific* other card works: only the reference machine has actually been confirmed end to end. If a check fails, the installer stops and writes a report instead of continuing -
+  that is the safe direction. Reports from other PCs are how this actually gets confirmed; see [impacifist/Windows-GPU-UNLOCK#41](https://github.com/impacifist/Windows-GPU-UNLOCK/issues/41).
 - Only matrix-heavy GPU work speeds up (for example AI prefill, training, image generation) - and real-world gains are well below the raw
   TFLOPS number, since actual workloads mix in memory-bound work the unlock doesn't touch; measured real local LLM prefill gained +3-8%, not
   +82%. Games, FP32 work and memory-bound work (including LLM token generation/decode) do not speed up at all.
@@ -63,6 +64,18 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
+
+### 2026-10-26 - generalized the last hardcoded reference-card assumption in the host tests
+
+One of the host tests still assumed any real firmware capture it parsed must match this machine's exact numbers -
+the known blocker flagged earlier as stopping other cards from passing. Replaced it with checks that validate
+whatever real card's firmware is internally consistent, instead of requiring an exact match to the reference
+card. Proved this actually generalizes (not just asserted) with a new test against two firmware shapes that
+aren't this card at all, including one deliberately misaligned by a different amount than this card's own case.
+Confirmed the same evening with a fresh real capture (a new diagnostic boot, not reused data): rebuilt the real
+EFI image and ran the complete host test suite against it - all 12 groups pass, zero regression on the one card
+this has always been verified on. This removes the known blocker; it doesn't yet prove any specific other card
+works - that still needs someone with that hardware to actually try it and report back.
 
 ### 2026-10-26 - reproduced locked-vs-unlocked a day later, and measured real local LLM inference
 
