@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-10-28 - a missed keypress during the first manual unlock was reported as a hard failure
+
+- The manual unlock's keypress wait (`internal-boot/unlock/app.c`'s `Arm()`, `stage="arming"`) cancels
+  two ways by design, both completely benign and clearly documented on screen - "Press U to attempt
+  once; Esc or 30-second timeout cancels": `EFI_TIMEOUT` if nobody presses U in time, `EFI_ABORTED` if
+  Esc is pressed. Neither touches the hardware (`attempted=0`). `installer/Unlock.ps1`'s
+  `Read-RunReport` classifier required a literal `status=0` for its benign "nothing happened"
+  (`NotApplied`) class; a timeout or Esc reports its own actual EFI_STATUS code there instead (that is
+  simply what the check recorded), so both fell through to `Failed` - the installer told the user to
+  post a public bug report for a report that was created by not noticing a prompt. `Failed` also never
+  offers "Try again?", only "Close" - found live on the reference machine after a real missed keypress.
+- Fixed: the classifier now also accepts `attempted=0` at `stage=arming` with exactly those two known-
+  benign codes as `NotApplied`. Every other combination - including those same two codes at any other
+  stage - still correctly classifies as `Failed`, so this cannot mask an unrelated real failure that
+  happens to share one of these status values.
+- Verified: added three test cases (`installer/tests/Test-Unlock.ps1`) - timeout at arming, Esc at
+  arming, and the same timeout code at a different stage (must still fail) - using the real `%#llx`-
+  formatted status string `app.c` actually emits. Full installer suite: 1055 of 1055 relevant tests
+  pass (same one unrelated, pre-existing local ACL flake as every run today).
+
 ## 2026-10-28 - the console-prepare GOP-retry fix crashed its own host test (null function pointer)
 
 - The GOP-discovery retry added earlier today calls `bs->Stall(...)`. `tests/test_console.c`'s mocked

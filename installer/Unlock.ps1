@@ -54,9 +54,17 @@ function Read-RunReport([string]$Path) {
  $final = $m[$m.Count - 1].Groups[1].Value.Trim()
  $kv = @{}; foreach ($t in ($final -split '\s+')) { if ($t -match '^([a-z_]+)=(.*)$') { $kv[$Matches[1]] = $Matches[2] } }
  $ss = [regex]::Match($text, '(?m)SS0=([0-9a-fA-F]{8}) SS1=([0-9a-fA-F]{8})')
+ # The manual-mode keypress wait (app.c Arm(), stage="arming") returns exactly two codes by design
+ # when nothing was attempted: EFI_TIMEOUT (0x...012, the 30-second window ran out) and EFI_ABORTED
+ # (0x...015, Esc was pressed) - both are the documented, expected way to cancel ("Press U to attempt
+ # once; Esc or 30-second timeout cancels"), not a safety-check failure. Found 2026-10-28: this
+ # classifier required a literal status=0 for the benign "nothing happened" case, so a plain missed
+ # keypress fell through to Failed - no "Try again?", straight to "post this report in a public issue"
+ # for something that happens whenever someone glances away from the screen for 30 seconds.
  $class = if ($kv['attempted'] -eq '1' -and $kv['clean'] -eq '1' -and $kv['status'] -eq '0') { 'Applied' }
   elseif ($kv['attempted'] -eq '1') { 'Failed' }
   elseif ($kv['attempted'] -eq '0' -and $kv['status'] -eq '0') { 'NotApplied' }
+  elseif ($kv['attempted'] -eq '0' -and $kv['stage'] -eq 'arming' -and $kv['status'] -in '0x8000000000000012', '0x8000000000000015') { 'NotApplied' }
   else { 'Failed' }
  [pscustomobject]@{ Class = $class; Final = "FINAL $final"; Detail = $final; Selectors = $(if ($ss.Success) { $ss.Groups[1].Value + '/' + $ss.Groups[2].Value } else { $null }) }
 }

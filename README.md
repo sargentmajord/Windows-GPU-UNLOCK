@@ -65,6 +65,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - a missed keypress on the first unlock was wrongly reported as a hard failure
+
+If you didn't press U in time (or pressed Esc) during the first manual unlock, the installer treated
+that as if something had actually gone wrong - straight to "post a public bug report," no "Try again?"
+option, even though nothing was touched and the card kept its normal speed. It now correctly recognizes
+a plain missed keypress or Esc and offers to try again, like it already did for every other benign
+cancel.
+
 ### 2026-10-28 - fixed a crash the console-prepare GOP-retry fix introduced in its own host test
 
 The GOP-discovery retry added earlier the same day called a function the test's mock environment never

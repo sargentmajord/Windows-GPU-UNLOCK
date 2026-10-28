@@ -16,6 +16,11 @@ try {
  Expect 'attempted but not clean is Failed' (Read-RunReport (Report 'f.txt' "FINAL status=0 stage=transaction attempted=1 driver_release=0 clean=0")).Class 'Failed'
  Expect 'attempted with an error status is Failed' (Read-RunReport (Report 'f2.txt' "FINAL status=8000000000000007 stage=transaction attempted=1 driver_release=0 clean=1")).Class 'Failed'
  Expect 'not attempted with an error status is Failed' (Read-RunReport (Report 'f3.txt' "FINAL status=8000000000000007 stage=preflight attempted=0 driver_release=0 clean=0")).Class 'Failed'
+ # Real format from app.c's FINAL line (GuLog "%#llx"): the # flag prepends 0x for any nonzero value
+ # (only a literal 0 prints bare), matching the reference machine's actual captured report exactly.
+ Expect 'not attempted, 30-second keypress timeout at arming is NotApplied' (Read-RunReport (Report 'to.txt' "FINAL status=0x8000000000000012 stage=arming attempted=0 driver_release=0 clean=1")).Class 'NotApplied'
+ Expect 'not attempted, Esc at arming is NotApplied' (Read-RunReport (Report 'esc.txt' "FINAL status=0x8000000000000015 stage=arming attempted=0 driver_release=0 clean=1")).Class 'NotApplied'
+ Expect 'the same timeout status at a different stage is still Failed - not a blanket pass' (Read-RunReport (Report 'to2.txt' "FINAL status=0x8000000000000012 stage=preflight attempted=0 driver_release=0 clean=1")).Class 'Failed'
  Expect 'no final line is Unreadable' (Read-RunReport (Report 'u.txt' "no final line here")).Class 'Unreadable'
  Expect 'the LAST final line counts' (Read-RunReport (Report 'm.txt' "FINAL status=0 stage=x attempted=0 clean=1`r`nFINAL status=0 stage=transaction attempted=1 driver_release=0 clean=1")).Class 'Applied'
 
