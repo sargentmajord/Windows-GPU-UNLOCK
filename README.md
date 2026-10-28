@@ -71,6 +71,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - a first pass at a modern look for the installer's GUI
+
+Cosmetic only: a real color theme (light background, dark header banner, accent blue) and flat,
+borderless buttons in place of the plain default Windows controls, with the one expected next action
+(Yes, Confirm, Close, OK) now visually standing out from equal, either-way choices. No change in
+behavior; not yet seen rendered on a real screen.
+
 ### 2026-10-28 - a real administrator's own account could get the optional Start menu shortcut refused
 
 The optional Start menu shortcut could get created, then immediately refused and removed, naming the

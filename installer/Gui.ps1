@@ -4,36 +4,64 @@
 # The installer itself runs in a worker (a separate runspace) so the window never freezes; the worker's prompt functions (GuiPrompts.ps1) talk to
 # this window through a queue. The phases, state, journal and tests are the shared modules; no safety rule lives only here.
 
+# Needed here at dot-source time, not only later inside New-InstallerWindow: $script:UiTheme below builds real
+# System.Drawing.Color values the moment this file loads, so the type must already be resolvable by then.
+Add-Type -AssemblyName System.Drawing
+
 $script:UiColors = @{ Red = 'Firebrick'; Green = 'SeaGreen'; Yellow = 'DarkGoldenrod'; Cyan = 'SteelBlue'; DarkRed = 'Firebrick'; DarkGreen = 'SeaGreen'; DarkYellow = 'DarkGoldenrod'; Magenta = 'Purple' }
+# A small, fixed palette so every control reads as one app instead of each defaulting to system gray/white
+# independently. Accent is the same blue Windows 11's own Fluent design uses, so this looks native to current
+# Windows rather than a custom skin bolted onto it.
+$script:UiTheme = @{
+ Background   = [System.Drawing.Color]::FromArgb(0xF3, 0xF4, 0xF7)
+ Accent       = [System.Drawing.Color]::FromArgb(0x00, 0x67, 0xC0)
+ AccentText   = [System.Drawing.Color]::White
+ ButtonBack   = [System.Drawing.Color]::White
+ ButtonText   = [System.Drawing.Color]::FromArgb(0x20, 0x20, 0x20)
+ ButtonBorder = [System.Drawing.Color]::FromArgb(0xD0, 0xD3, 0xDA)
+ LogBack      = [System.Drawing.Color]::White
+ HeaderBack   = [System.Drawing.Color]::FromArgb(0x1F, 0x2A, 0x44)
+ HeaderText   = [System.Drawing.Color]::White
+}
 
 function New-InstallerWindow($Bridge) {
  Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing
  $form = New-Object System.Windows.Forms.Form
  $form.Text = 'Windows GPU UNLOCK installer'; $form.StartPosition = 'CenterScreen'; $form.ClientSize = New-Object System.Drawing.Size(820, 640); $form.MinimumSize = New-Object System.Drawing.Size(640, 480)
  $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+ $form.BackColor = $script:UiTheme.Background
  $table = New-Object System.Windows.Forms.TableLayoutPanel
- $table.Dock = 'Fill'; $table.ColumnCount = 1; $table.RowCount = 4
+ $table.Dock = 'Fill'; $table.ColumnCount = 1; $table.RowCount = 4; $table.BackColor = $script:UiTheme.Background
  [void]$table.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('AutoSize')))
  [void]$table.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('Absolute', 10)))
  [void]$table.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('Percent', 100)))
  [void]$table.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('AutoSize')))
+ # A solid-color banner strip for the step name, instead of plain text sitting directly on the window's own
+ # background - the single biggest thing that made this read as an old-style Windows dialog rather than a
+ # current app.
+ $headerPanel = New-Object System.Windows.Forms.Panel
+ $headerPanel.Dock = 'Fill'; $headerPanel.BackColor = $script:UiTheme.HeaderBack; $headerPanel.Height = 52
  $header = New-Object System.Windows.Forms.Label
- $header.Text = 'Starting...'; $header.AutoSize = $true; $header.Margin = New-Object System.Windows.Forms.Padding(12, 10, 12, 4); $header.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 11)
+ $header.Text = 'Starting...'; $header.AutoSize = $false; $header.Dock = 'Fill'; $header.TextAlign = 'MiddleLeft'
+ $header.Padding = New-Object System.Windows.Forms.Padding(16, 0, 16, 0); $header.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 12)
+ $header.BackColor = $script:UiTheme.HeaderBack; $header.ForeColor = $script:UiTheme.HeaderText
+ $headerPanel.Controls.Add($header)
  $bar = New-Object System.Windows.Forms.ProgressBar
  $bar.Style = 'Marquee'; $bar.MarqueeAnimationSpeed = 30; $bar.Dock = 'Fill'; $bar.Margin = New-Object System.Windows.Forms.Padding(12, 0, 12, 4)
  $log = New-Object System.Windows.Forms.RichTextBox
- $log.ReadOnly = $true; $log.Dock = 'Fill'; $log.Font = New-Object System.Drawing.Font('Consolas', 10); $log.BackColor = [System.Drawing.Color]::White; $log.BorderStyle = 'FixedSingle'
+ $log.ReadOnly = $true; $log.Dock = 'Fill'; $log.Font = New-Object System.Drawing.Font('Consolas', 10); $log.BackColor = $script:UiTheme.LogBack; $log.BorderStyle = 'FixedSingle'
  $log.Margin = New-Object System.Windows.Forms.Padding(12, 4, 12, 4); $log.WordWrap = $true; $log.DetectUrls = $false; $log.TabStop = $false
  $answer = New-Object System.Windows.Forms.TableLayoutPanel
  $answer.AutoSize = $true; $answer.Dock = 'Fill'; $answer.ColumnCount = 1; $answer.Margin = New-Object System.Windows.Forms.Padding(12, 4, 12, 12); $answer.Visible = $false
+ $answer.BackColor = $script:UiTheme.Background
  $prompt = New-Object System.Windows.Forms.Label
  $prompt.AutoSize = $true; $prompt.MaximumSize = New-Object System.Drawing.Size(760, 0); $prompt.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10.5); $prompt.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
  $extra = New-Object System.Windows.Forms.FlowLayoutPanel
- $extra.AutoSize = $true; $extra.FlowDirection = 'LeftToRight'; $extra.WrapContents = $true; $extra.Margin = New-Object System.Windows.Forms.Padding(0)
+ $extra.AutoSize = $true; $extra.FlowDirection = 'LeftToRight'; $extra.WrapContents = $true; $extra.Margin = New-Object System.Windows.Forms.Padding(0); $extra.BackColor = $script:UiTheme.Background
  $buttons = New-Object System.Windows.Forms.FlowLayoutPanel
- $buttons.AutoSize = $true; $buttons.FlowDirection = 'LeftToRight'; $buttons.WrapContents = $true; $buttons.Margin = New-Object System.Windows.Forms.Padding(0, 6, 0, 0)
+ $buttons.AutoSize = $true; $buttons.FlowDirection = 'LeftToRight'; $buttons.WrapContents = $true; $buttons.Margin = New-Object System.Windows.Forms.Padding(0, 6, 0, 0); $buttons.BackColor = $script:UiTheme.Background
  $answer.Controls.Add($prompt); $answer.Controls.Add($extra); $answer.Controls.Add($buttons)
- $table.Controls.Add($header, 0, 0); $table.Controls.Add($bar, 0, 1); $table.Controls.Add($log, 0, 2); $table.Controls.Add($answer, 0, 3)
+ $table.Controls.Add($headerPanel, 0, 0); $table.Controls.Add($bar, 0, 1); $table.Controls.Add($log, 0, 2); $table.Controls.Add($answer, 0, 3)
  $form.Controls.Add($table)
  $ui = @{ Form = $form; Header = $header; Bar = $bar; Log = $log; Answer = $answer; Prompt = $prompt; Extra = $extra; Buttons = $buttons; Bridge = $Bridge; Asking = $false; Finished = $false; Phrase = ''; Check = $null; Text = $null; ConfirmButton = $null }
  $form.Tag = $ui
@@ -70,9 +98,20 @@ function Submit-UiAnswer($Ui, $Value) {
  $Ui.Bridge.AnswerReady.Set()
 }
 
-function New-UiButton([string]$Text, [int]$Width = 110) {
+# -Primary marks the one button that should stand out visually - the installer's own "no default" questions
+# still get an answer with no bias (the confirm/close/free-text cases only ever have one real action button
+# anyway), but a flat, borderless, solid-colored button next to plain outlined ones is the other big piece of
+# what read as dated: default WinForms buttons are a 3-D beveled gray box regardless of what they do.
+function New-UiButton([string]$Text, [int]$Width = 110, [switch]$Primary) {
  $b = New-Object System.Windows.Forms.Button
- $b.Text = $Text; $b.Size = New-Object System.Drawing.Size($Width, 34); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 8, 6)
+ $b.Text = $Text; $b.Size = New-Object System.Drawing.Size($Width, 36); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 8, 6)
+ $b.FlatStyle = 'Flat'; $b.Cursor = [System.Windows.Forms.Cursors]::Hand; $b.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10)
+ if ($Primary) {
+  $b.BackColor = $script:UiTheme.Accent; $b.ForeColor = $script:UiTheme.AccentText; $b.FlatAppearance.BorderSize = 0
+ } else {
+  $b.BackColor = $script:UiTheme.ButtonBack; $b.ForeColor = $script:UiTheme.ButtonText
+  $b.FlatAppearance.BorderSize = 1; $b.FlatAppearance.BorderColor = $script:UiTheme.ButtonBorder
+ }
  $b
 }
 
@@ -84,7 +123,7 @@ function Show-UiAsk($Ui, $Msg) {
  $Ui.Prompt.Text = [string]$Msg.Prompt
  switch ($Msg.Type) {
   'yesno' {
-   $y = New-UiButton 'Yes'; $n = New-UiButton 'No'
+   $y = New-UiButton 'Yes' -Primary; $n = New-UiButton 'No'
    $y.Add_Click({ param($s, $e) Submit-UiAnswer $s.FindForm().Tag $true }); $n.Add_Click({ param($s, $e) Submit-UiAnswer $s.FindForm().Tag $false })
    $Ui.Buttons.Controls.Add($y); $Ui.Buttons.Controls.Add($n)
   }
@@ -103,7 +142,7 @@ function Show-UiAsk($Ui, $Msg) {
    $Ui.Phrase = [string]$Msg.Phrase
    $c = New-Object System.Windows.Forms.CheckBox
    $c.Text = 'Yes, I understand and I confirm this (' + $Msg.Phrase + ')'; $c.AutoSize = $true; $c.Margin = New-Object System.Windows.Forms.Padding(0, 4, 0, 4)
-   $ok = New-UiButton 'Confirm'; $ok.Enabled = $false; $cancel = New-UiButton 'Cancel'
+   $ok = New-UiButton 'Confirm' -Primary; $ok.Enabled = $false; $cancel = New-UiButton 'Cancel'
    $c.Add_CheckedChanged({ param($s, $e) $u = $s.FindForm().Tag; $u.ConfirmButton.Enabled = $s.Checked })
    $ok.Add_Click({ param($s, $e) $u = $s.FindForm().Tag; Submit-UiAnswer $u ([bool]$u.Check.Checked) })
    $cancel.Add_Click({ param($s, $e) Submit-UiAnswer $s.FindForm().Tag $false })
@@ -113,11 +152,11 @@ function Show-UiAsk($Ui, $Msg) {
   default {
    if (([string]$Msg.Prompt) -like 'Press Enter to close*') {
     $Ui.Prompt.Text = 'The installer has finished.'
-    $b = New-UiButton 'Close'; $b.Add_Click({ param($s, $e) $u = $s.FindForm().Tag; $u.Finished = $true; Submit-UiAnswer $u '' }); $Ui.Buttons.Controls.Add($b)
+    $b = New-UiButton 'Close' -Primary; $b.Add_Click({ param($s, $e) $u = $s.FindForm().Tag; $u.Finished = $true; Submit-UiAnswer $u '' }); $Ui.Buttons.Controls.Add($b)
    } else {
     $t = New-Object System.Windows.Forms.TextBox
     $t.Width = 420; $Ui.Text = $t; $Ui.Extra.Controls.Add($t)
-    $b = New-UiButton 'OK'; $b.Add_Click({ param($s, $e) $u = $s.FindForm().Tag; Submit-UiAnswer $u $u.Text.Text }); $Ui.Buttons.Controls.Add($b)
+    $b = New-UiButton 'OK' -Primary; $b.Add_Click({ param($s, $e) $u = $s.FindForm().Tag; Submit-UiAnswer $u $u.Text.Text }); $Ui.Buttons.Controls.Add($b)
    }
   }
  }

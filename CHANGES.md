@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-10-28 - GUI first pass: a real color palette and flat buttons instead of the 1998 default look
+
+- Cosmetic only, no change in behavior: `installer/Gui.ps1` now sets a real color theme (light
+  background, dark-navy header banner, Windows-11-blue accent) instead of leaving every control at
+  its unstyled WinForms default, and `New-UiButton` now draws flat, borderless (or thin-bordered)
+  buttons with a hand cursor and Segoe UI Semibold, with a new `-Primary` switch so the one expected
+  next action (Yes / Confirm / Close / the free-text OK button) reads as a filled accent button while
+  equal, ambiguous choices (No / Cancel / numbered options) stay neutral - preserving this installer's
+  existing rule that a genuinely ambiguous multi-way choice never gets a visual default pushed on it.
+- Found live by running the test suite before calling this done, not after: the first pass crashed
+  immediately, "Unable to find type [System.Drawing.Color]" - the new theme table was built at
+  top-level script scope, which runs at dot-source time, before `Add-Type -AssemblyName System.Drawing`
+  (previously only ever called later, inside `New-InstallerWindow`) had actually loaded the type. Fixed
+  by moving that `Add-Type` call to the top of the file, ahead of the theme definition.
+- Verified: `installer/tests/Test-Gui.ps1`, 56 of 56. Full installer suite, run elevated: 1161 of 1161,
+  zero failures.
+- Not yet verified: what this actually looks like rendered on screen. This was a deliberately
+  conservative first pass (palette and flat buttons only, no custom-drawn effects) specifically because
+  it can only be checked by eye, not by a test suite - the next pass depends on seeing it run.
+
 ## 2026-10-28 - a real administrator's own account could get the Start menu shortcut refused
 
 - Found live: the Start menu shortcut was created, then immediately refused and deleted - "can be
