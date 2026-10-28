@@ -288,6 +288,16 @@ static BOOLEAN FullExpected(const GRAPH *g,UINTN stage) {
   }
   return g->Count==wanted+own;
 #else
+  /* stage>=4: the target's own PCI handle (PreparedPlan.RtxPci) just went through a real FLR to
+   * apply the unlock - any driver-level binding IT held can legitimately be disturbed by that reset,
+   * not only the specific agent (Full.NvAgent) this used to assume. Found 2026-10-28 on the reference
+   * machine: a real post-unlock graph also lost a binding from a second, unrelated agent/protocol
+   * (fe47349a-7f0d-4641-822b-34baa28ecdd0, not one this project tracks or names) on that same handle
+   * - itself still a legitimate FLR side effect, just not the one specific agent this anticipated.
+   * This forgives a PreparedGraph edge on that handle going missing, never a brand-new one appearing:
+   * each such edge's live count is folded into `wanted` as whatever it actually is (0 if gone, 1 if
+   * still there), so a genuinely new, unaccounted-for edge on that same handle still inflates g->Count
+   * past wanted+own and is still caught by the final check below, exactly as for every other handle. */
   UINTN wanted=0,own=0;
   for(UINTN i=0;i<g->Count;i++) {
     const EDGE *e=&g->Edges[i];
@@ -305,10 +315,15 @@ static BOOLEAN FullExpected(const GRAPH *g,UINTN stage) {
 #else
     if(stage>=3 && e->Handle==PreparedPlan.Rtx && e->Agent==Full.EdidAgent && GuGuidEqual(&e->Protocol,&EdidGuid))continue;
 #endif
-    if(stage>=4 && e->Handle==PreparedPlan.RtxPci && e->Agent==Full.NvAgent)continue;
-    wanted++;UINTN found=0;
+    UINTN found=0;
     for(UINTN j=0;j<g->Count;j++)if(SameEdge(e,&g->Edges[j]))found++;
+    if(stage>=4 && e->Handle==PreparedPlan.RtxPci) {
+      if(found>1)return FALSE;
+      wanted+=found;
+      continue;
+    }
     if(found!=1)return FALSE;
+    wanted++;
   }
   return g->Count==wanted+own;
 #endif

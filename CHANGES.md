@@ -1,5 +1,32 @@
 # Changes
 
+## 2026-10-28 - the first real unlock applied cleanly, then got refused at the final handoff check
+
+- **The unlock itself worked.** On the reference machine's first fully clean run all the way through
+  (every fix above in place, U pressed in time): the FLR completed, `SS0=0x88888888 SS1=0x00000008`
+  confirmed in the transaction report - the exact unlocked target values. `HANDOFF STOPPED` happened
+  one stage later, at `full-release.c`'s final pre-Windows safety recheck (`verify-driver-graph-match`,
+  `FullExpected(&g,4)`), which failed with `EFI_NOT_READY`.
+- Diffed the two full system handle/protocol graph captures this run wrote (`FULL03.TXT`, before and
+  after the unlock) directly against each other. The target card's own PCI handle
+  (`PreparedPlan.RtxPci`) lost three driver-level bindings across the FLR: two from the already-known
+  NVIDIA driver agent (already tolerated by an existing stage-4 exception), and one from a second,
+  separate agent bound through a protocol GUID (`fe47349a-7f0d-4641-822b-34baa28ecdd0`) this project
+  has never named or tracked anywhere. A real FLR can legitimately disturb any driver-level binding the
+  reset device held, not only the one agent this anticipated - and `FullExpected` required every
+  `PreparedGraph` edge on that handle to still exist, with no exception for this one.
+- Fixed, carefully: a `PreparedGraph` edge on the target's own PCI handle may now be missing at the
+  final stage, from any agent - but a genuinely new, unaccounted-for edge on that same handle is still
+  caught exactly as before, by folding its live count into the running total instead of exempting the
+  handle outright. Nothing about any other handle's verification changed.
+- Verified the distinction matters, not just the headline fix: an initial, simpler version (exempt the
+  whole handle unconditionally) silently broke an existing host test built for exactly this edge case -
+  `test_full.c` injects a deliberately suspicious new edge on this same handle and expects it caught.
+  The corrected version passes that test *and* the real captured post-unlock graph. Full-release host
+  suite: 9032 checks. Real `FULL.EFI` build: clean, PE-verified. Full host-mock and installer suites:
+  no regressions (same two pre-existing, unrelated environment gaps as every run today - missing pinned
+  stock-asset fixtures, and one local test-fixture ACL flake).
+
 ## 2026-10-28 - a missed keypress during the first manual unlock was reported as a hard failure
 
 - The manual unlock's keypress wait (`internal-boot/unlock/app.c`'s `Arm()`, `stage="arming"`) cancels

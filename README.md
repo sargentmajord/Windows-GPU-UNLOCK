@@ -65,6 +65,16 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - the first real unlock applied cleanly, then got refused one stage too late
+
+The unlock itself worked - the firmware reset applied and the card's registers confirmed the unlocked
+state - but a final safety check one stage later, re-verifying nothing unexpected had changed before
+handing off to Windows, refused anyway. That check expected only one specific driver binding to
+disappear from the just-reset card; a second, unrelated one also legitimately disappeared and wasn't
+accounted for. Fixed to tolerate any binding loss on that one card's own handle - and confirmed, with a
+host test built for exactly this, that a genuinely suspicious new binding appearing there is still
+caught, not waved through along with it.
+
 ### 2026-10-28 - a missed keypress on the first unlock was wrongly reported as a hard failure
 
 If you didn't press U in time (or pressed Esc) during the first manual unlock, the installer treated
