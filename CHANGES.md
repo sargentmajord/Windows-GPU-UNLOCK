@@ -1,24 +1,40 @@
 # Changes
 
-## 2026-10-28 - GUI first pass: a real color palette and flat buttons instead of the 1998 default look
+## 2026-10-28 - GUI: rounded window corners and buttons that follow whatever Windows theme is already running
 
-- Cosmetic only, no change in behavior: `installer/Gui.ps1` now sets a real color theme (light
-  background, dark-navy header banner, Windows-11-blue accent) instead of leaving every control at
-  its unstyled WinForms default, and `New-UiButton` now draws flat, borderless (or thin-bordered)
-  buttons with a hand cursor and Segoe UI Semibold, with a new `-Primary` switch so the one expected
-  next action (Yes / Confirm / Close / the free-text OK button) reads as a filled accent button while
-  equal, ambiguous choices (No / Cancel / numbered options) stay neutral - preserving this installer's
-  existing rule that a genuinely ambiguous multi-way choice never gets a visual default pushed on it.
-- Found live by running the test suite before calling this done, not after: the first pass crashed
-  immediately, "Unable to find type [System.Drawing.Color]" - the new theme table was built at
-  top-level script scope, which runs at dot-source time, before `Add-Type -AssemblyName System.Drawing`
-  (previously only ever called later, inside `New-InstallerWindow`) had actually loaded the type. Fixed
-  by moving that `Add-Type` call to the top of the file, ahead of the theme definition.
-- Verified: `installer/tests/Test-Gui.ps1`, 56 of 56. Full installer suite, run elevated: 1161 of 1161,
-  zero failures.
-- Not yet verified: what this actually looks like rendered on screen. This was a deliberately
-  conservative first pass (palette and flat buttons only, no custom-drawn effects) specifically because
-  it can only be checked by eye, not by a test suite - the next pass depends on seeing it run.
+- Cosmetic only, no change in behavior. Went through three real attempts, each one seen rendered on the
+  reference machine and judged on that, not on how the code read:
+  1. A fixed custom color theme (light background, dark-navy header banner, a blue accent, flat
+     borderless buttons). Rejected on sight: numbered-option buttons had a near-invisible border, the
+     whole thing read as flat and plain, and a second pass that gave those buttons an accent-colored
+     outline was rejected too, for the same reason in reverse - the colors were the wrong fix, not the
+     amount of color.
+  2. Reverted `installer/Gui.ps1` entirely back to its original plain-default-controls state (no custom
+     theme, no overridden `FlatStyle`). Judged better than either colored attempt, but still "looks old" -
+     square window corners and square buttons, the two things every current Windows app has and this one
+     didn't.
+  3. What actually shipped: the window's own corners are now genuinely rounded, via a direct
+     `DwmSetWindowAttribute` call (`DWMWCP_ROUND`) - ignored harmlessly on anything older than Windows 11,
+     not emulated. The whole window's colors now follow whatever light/dark mode the person already has
+     Windows set to (read once from `HKCU\...\Personalize\AppsUseLightTheme`, applied via
+     `DWMWA_USE_IMMERSIVE_DARK_MODE` for the title bar and a matching palette for everything else) -
+     stock default colors in light mode, unchanged from attempt 2; a proper dark palette only in dark
+     mode. Buttons are repainted with a real anti-aliased rounded rectangle instead of a hard corner -
+     a `Region` clip was tried first and rejected as "blocky": clipping has no anti-aliasing, so the curve
+     comes out as a visible pixel staircase, not smooth. Owner-drawing it with `GraphicsPath` and
+     `SmoothingMode.AntiAlias` was the only way to get an actual smooth curve in classic WinForms.
+- Two real bugs, both caught by the test suite before being called done, not after:
+  - The same top-level/dot-source-time ordering mistake as earlier today, recurring in the new dark-theme
+    color table: it built `System.Drawing.Color` values before `Add-Type -AssemblyName System.Drawing` had
+    run. Fixed the same way, by moving the `Add-Type` call ahead of the table.
+  - The first rounded-button draft blanked each button's real `Text` property (to avoid drawing the label
+    twice) - broke the test suite's own click-by-text lookup (`ButtonNamed`, via `Where-Object Text -eq`)
+    and would have broken screen-reader access the same way. Fixed by keeping `Text` set normally: the
+    repaint already erases and redraws the whole face before adding the label back, so nothing is actually
+    drawn twice on screen either way.
+- Verified: `installer/tests/Test-Gui.ps1`, 56 of 56, after each of the three attempts. Confirmed live on
+  the reference machine: rendered, looked at, and approved ("perfect") only after attempt 3 - attempts 1
+  and 2 were both rejected the same way, by looking at the real window, not by the tests passing.
 
 ## 2026-10-28 - a real administrator's own account could get the Start menu shortcut refused
 

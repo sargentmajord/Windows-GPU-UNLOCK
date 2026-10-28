@@ -71,12 +71,15 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
-### 2026-10-28 - a first pass at a modern look for the installer's GUI
+### 2026-10-28 - a modern look for the installer's GUI, matching whatever Windows theme is already running
 
-Cosmetic only: a real color theme (light background, dark header banner, accent blue) and flat,
-borderless buttons in place of the plain default Windows controls, with the one expected next action
-(Yes, Confirm, Close, OK) now visually standing out from equal, either-way choices. No change in
-behavior; not yet seen rendered on a real screen.
+Cosmetic only. Tried a fixed custom color theme first; seen rendered, it looked worse than the plain
+default controls it replaced, so that was dropped entirely in favor of this instead: the window's own
+corners are now genuinely rounded (Windows 11 only; ignored harmlessly on older Windows), every button
+gets a real anti-aliased rounded face instead of a hard rectangle, and the whole window's colors now
+follow whatever light or dark mode the person already has Windows set to - plain default colors in light
+mode (unchanged from before), a proper dark palette in dark mode - rather than a fixed skin of its own
+that matches neither.
 
 ### 2026-10-28 - a real administrator's own account could get the optional Start menu shortcut refused
 
