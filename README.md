@@ -1,11 +1,17 @@
 # Windows GPU UNLOCK - universal installer fork
 
+> **⏸ Paused, 2026-10-28: please hold off running the installer for now.** Actually running the installer wizard
+> start-to-finish (not just the unlock mechanism underneath it) surfaced several real, previously-unknown bugs today -
+> most now fixed and pushed, one full clean end-to-end pass still not yet confirmed. See
+> [the changelog](#changelog) below for exactly what changed and why. This notice comes down once that one clean
+> run is confirmed.
+
 A fork of [impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK), the Windows UEFI
 port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a short program before Windows starts that sets the tensor-math
 speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork adds a guided, self-service installer
 (text and graphical) with roll back, update-in-place and a full test suite, built and verified on one documented machine.
 
-**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: only one machine is known to get all the way through it** — see what that means for other hardware in [What has been verified](#what-has-been-verified-one-machine-2026-10-25) below. Everything below describes that machine unless noted otherwise.
+**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: paused - see the notice above.** Only one machine is known to have gotten this far - see what that means for other hardware in [What has been verified](#what-has-been-verified-one-machine-2026-10-25) below. Everything below describes that machine unless noted otherwise.
 
 ## Read this before trying anything
 
