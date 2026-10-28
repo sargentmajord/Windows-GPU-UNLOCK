@@ -312,7 +312,7 @@ finally { Remove-TestRoot $w.T }
 $w = New-World
 try {
  $data = Get-DataRoot
- Set-Content (Join-Path $data 'Arm-NextBoot.ps1') 'arm'; Set-Content (Join-Path $data 'unlock-schedule-state.json') '{}'; Set-Content (Join-Path $data 'arm.log') 'log'
+ Set-Content (Join-Path $data 'Arm-NextBoot.ps1') 'arm'; Set-Content (Join-Path $data 'arm-state.json') '{}'; Set-Content (Join-Path $data 'arm.log') 'log'
  $scr = Join-Path $data 'Unlock-Next-Boot.ps1'; Set-Content $scr 'script'
  $startLink = Join-Path $w.T 'start.lnk'; $deskLink = Join-Path $w.T 'desk.lnk'; $oldLink = Join-Path $w.T 'old.lnk'
  foreach ($l in $startLink, $deskLink, $oldLink) { Set-Content $l 'lnk' }
@@ -324,7 +324,7 @@ try {
  $jj = Add-JournalEntry -Phase 'schedule' -Action 'unlock at every start (startup task, Fast Startup off)' -Target 'WindowsGPUUnlock-ArmNextBoot' -Previous ([ordered]@{ FastStartup = 1 }); Set-JournalStatus $jj 'done'
  $r = Run-Rollback $w @('Y')
  ExpectTrue 'the startup task is removed through the schedule script (which restores Fast Startup)' ($script:Disabled -eq 1 -and (ResultFor $r '*startup task*').Outcome -eq 'Removed')
- ExpectTrue 'its generated script and state are deleted, its log is kept' ((-not (Test-Path (Join-Path $data 'Arm-NextBoot.ps1'))) -and (-not (Test-Path (Join-Path $data 'unlock-schedule-state.json'))) -and (Test-Path (Join-Path $data 'arm.log')))
+ ExpectTrue 'its generated script and state are deleted, its log is kept' ((-not (Test-Path (Join-Path $data 'Arm-NextBoot.ps1'))) -and (-not (Test-Path (Join-Path $data 'arm-state.json'))) -and (Test-Path (Join-Path $data 'arm.log')))
  ExpectTrue 'the shortcut that points at the installer''s script is deleted' (-not (Test-Path $startLink))
  ExpectTrue 'a shortcut someone re-pointed is left' ((Test-Path $deskLink) -and (ResultFor $r "*desk.lnk").Detail -like '*no longer points*')
  ExpectTrue 'a shortcut that existed before the installer is left' ((Test-Path $oldLink) -and (ResultFor $r '*old.lnk').Detail -like '*before the installer*')

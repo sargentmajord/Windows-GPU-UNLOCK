@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-10-28 - Roll back left its own every-boot state file behind
+
+- Found live, on the first full clean end-to-end run: Roll back correctly removed the "unlock at every
+  start" scheduled task and put Fast Startup back, but left `arm-state.json` (the task's own
+  circuit-breaker state, "armed or not, how many runs left") sitting in the data folder afterward.
+  Harmless once the task itself is gone - nothing reads it - but still a real gap, not what Roll back's
+  own promise ("deletes the installer's working files") says it does.
+- Root cause: `Rollback.ps1`'s cleanup list named the file `unlock-schedule-state.json` - a name from
+  before this file was renamed to `arm-state.json` elsewhere (`internal-boot/Set-UnlockSchedule.ps1`),
+  never updated here. `Test-Rollback.ps1`'s own fixture had the same stale name baked into it, which is
+  exactly why the test never caught the mismatch - both sides agreed on the wrong name. Fixed both to the
+  real name, `arm-state.json`.
+- Also removed the one real leftover file this bug had already produced, on the reference machine, by
+  hand (elevated - the data folder only an administrator or SYSTEM can write to).
+- Verified: `Test-Rollback.ps1`, 98 of 98.
+
 ## 2026-10-28 - GUI: rounded window corners and buttons that follow whatever Windows theme is already running
 
 - Cosmetic only, no change in behavior. Went through three real attempts, each one seen rendered on the

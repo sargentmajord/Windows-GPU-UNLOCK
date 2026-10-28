@@ -71,6 +71,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - Roll back now cleans up a small file it used to leave behind
+
+Found on the first full clean install-to-rollback run: Roll back correctly removed the "unlock at every
+start" task and restored Fast Startup, but left one small, harmless state file of its own behind
+afterward - a leftover from a file rename that one cleanup line never caught up with. Fixed; Roll back
+now removes it too.
+
 ### 2026-10-28 - a modern look for the installer's GUI, matching whatever Windows theme is already running
 
 Cosmetic only. Tried a fixed custom color theme first; seen rendered, it looked worse than the plain
