@@ -1,5 +1,30 @@
 # Changes
 
+## 2026-10-28 - the stuck-notification's Repair and "No, turn it off" buttons never actually worked
+
+- Found live, on the reference machine, while testing the console-prepare fix below: clicking Repair on
+  the every-boot-stuck toast, approving its UAC prompt, and confirming the elevated process actually
+  launched - `arm-state.json` was still untouched afterward. Root cause: `Handle-NotifyAction.ps1`'s
+  `Invoke-Elevated` built each action's command text from a scriptblock that used `$using:stateFile`,
+  `$using:taskName`, `$using:power`. `$using:` is only valid inside `Invoke-Command`, `Start-Job`, or
+  workflow `InlineScript` - it was never valid for a plain `Start-Process -Verb RunAs` to a brand-new
+  process, which cannot see the calling process's variables at all. Every elevated action threw
+  `UsingWithoutInvokeCommand` immediately and did nothing - not only when not already elevated, but
+  even when already elevated, since `$using:` is invalid either way. The failure was also silent:
+  nothing checked the elevated child's exit code, so neither Repair nor "No, turn it off" ever gave any
+  sign they hadn't worked.
+- Fixed: `Invoke-Elevated` now takes an explicit `-With` hashtable of the values its scriptblock needs;
+  for a new elevated process these are re-declared as literal, single-quoted assignments before the
+  body runs (a separate process can only receive literal text, never live variable references - that's
+  the whole reason `$using:` existed as a feature elsewhere, and the whole reason it cannot work here).
+  All three call sites (`repair`, `no`) updated to pass their values this way and drop every `$using:`.
+  The already-elevated fast path is unaffected by this bug or its fix: plain variable names already
+  resolve correctly there through ordinary scriptblock scoping. Also added: the elevated child's exit
+  code is now checked and a failure throws, instead of being silently swallowed.
+- Verified: reproduced the exact failure standalone first (confirmed the precise `UsingWithoutInvoke-
+  Command` error), then reproduced the fix standalone with a real UAC-elevated delete before applying
+  it to the real file.
+
 ## 2026-10-28 - console-prepare retries before refusing a GPU's GOP as missing after a hard power loss
 
 - Found on the reference machine after a real power loss: `GuPrepareConsole`'s first discovery pass

@@ -65,6 +65,12 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - the stuck-notification's Repair and "No, turn it off" buttons never actually worked
+
+Clicking Repair (or "No, turn it off") on the every-boot-stuck notification, and approving its permission prompt,
+silently did nothing - a bug in how the elevated action was built meant it failed before making any change, with
+no sign of failure. Fixed; both buttons now actually do what they say.
+
 ### 2026-10-28 - console-prepare retries before refusing a GPU's GOP as missing after a hard power loss
 
 On a dual-GPU setup, a real power loss (not just a PC restart - the monitor losing power too) can leave the
