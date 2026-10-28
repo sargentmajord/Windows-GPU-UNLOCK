@@ -104,7 +104,15 @@ function New-UnlockShortcut($State, [ValidateSet('manual', 'automatic')][string]
   [void](Invoke-JournaledChange -Phase 'schedule' -Action $(if ($isStart) { 'create the Start menu shortcut' } else { 'create the desktop shortcut' }) -Target $link -Previous ([ordered]@{ Existed = (Test-Path -LiteralPath $link) }) -Undo 'delete it if it is still the shortcut the installer made' -Do {
    Invoke-SysCreateShortcut $link $psExe ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $scriptPath) 'Queue one GPU unlock for the next start (asks for administrator approval)'
    if ($isStart) {
+    # A freshly created shortcut inherits the elevated creator's own account on its ACL, same as any new
+    # file (Write-SecureFile's comment above notes the same thing for the data folder) - setting only the
+    # owner, as before, does not clear that. Found 2026-10-28 on the reference machine: the installer's own
+    # (real administrator) creator account was still on the shortcut's ACL afterward, so this correctly-
+    # strict check refused it. Reset and re-grant explicitly, the same proven pattern Protect-DataFolder
+    # uses, so the shortcut's own permissions never depend on who happened to be logged in when it was made.
     Invoke-SysIcacls @($link, '/setowner', '*S-1-5-32-544', '/Q')
+    Invoke-SysIcacls @($link, '/reset', '/Q')
+    Invoke-SysIcacls @($link, '/inheritance:r', '/grant:r', '*S-1-5-18:F', '*S-1-5-32-544:F', '*S-1-5-32-545:RX', '/Q')
     $p = @(Get-SecurityProblems $link) + @(Get-SecurityProblems (Split-Path -Parent $link))
     if ($p.Count) { Remove-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue; throw ('The Start menu shortcut can be changed by ordinary users, so it was removed: ' + ($p -join '; ')) }
    }

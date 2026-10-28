@@ -65,6 +65,15 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - a real administrator's own account could get the optional Start menu shortcut refused
+
+The optional Start menu shortcut could get created, then immediately refused and removed, naming the
+installer's own (genuinely administrator) account as the problem - a new file keeps whoever made it on
+its own permissions, same as any file, and only the owner was being reset, not the rest. Now fully
+locked down the same proven way this project already protects its own data folder. (A fix that instead
+loosened the underlying security check was tried and deliberately reverted - it would have quietly
+weakened real tampering protection for everyone, not just fixed this one case.)
+
 ### 2026-10-28 - the first real unlock applied cleanly, then got refused one stage too late
 
 The unlock itself worked - the firmware reset applied and the card's registers confirmed the unlocked

@@ -1,5 +1,40 @@
 # Changes
 
+## 2026-10-28 - a real administrator's own account could get the Start menu shortcut refused
+
+- Found live: the Start menu shortcut was created, then immediately refused and deleted - "can be
+  changed by ordinary users" - naming the installer's own creator account, a genuine local
+  administrator. `New-UnlockShortcut` (`installer/Schedule.ps1`) only reset the shortcut's *owner*
+  (`icacls /setowner`) after creating it; a freshly created file also keeps whoever's elevated session
+  made it as an explicit entry on its own permissions, same as any new file (the comment already on
+  `Write-SecureFile`, elsewhere in this project, says as much for the data folder) - changing the owner
+  alone never clears that.
+- Considered, and rejected, loosening the security check itself (`Get-SecurityProblems`) to also trust
+  current members of the Administrators group by their own account SID, not just the group alias.
+  `installer/tests/Test-Secure.ps1` caught exactly why that is the wrong fix: a personal SID baked into
+  a permission entry survives that person later being removed from Administrators, while the group
+  alias is resolved fresh by Windows at access time - trusting personal admin SIDs would have quietly
+  reopened the exact tampering risk this check exists to prevent, for everyone, not just on this one
+  machine. Reverted that change entirely.
+- Fixed where the real gap actually was: the shortcut now gets the same full reset-and-explicit-grant
+  this project already uses for its own data folder (`Protect-DataFolder`, same file) - not just a new
+  owner, but the whole permission list reset and re-granted to exactly SYSTEM, Administrators and Users
+  (read-only), so the shortcut's own permissions never depend on who happened to be logged in when it
+  was made.
+- Verified directly against the real Start menu location on the reference machine (not only the test's
+  temp fixtures): a shortcut built the same way the installer builds one, then hardened the same way,
+  now reports zero problems. Full installer suite, run elevated end to end for the first time today:
+  1161 of 1161 pass, zero failures - including `Test-Secure.ps1` and `Test-Schedule.ps1`, which need
+  real elevation to run at all and had been silently skipping or reporting an unrelated-looking failure
+  in every earlier non-elevated run today.
+- Separately, honestly: this reference machine's actual Start menu *folder* (not the shortcut itself,
+  and not something this project creates or controls) also carries a stale permission entry from a
+  local user account that no longer exists - a harmless leftover with nobody left who could exploit it,
+  but still enough to make the installer's parent-folder check refuse on this one machine specifically,
+  even with the fix above. That check staying strict there is correct, not a bug: a parent folder that
+  genuinely allowed deleting and replacing the shortcut would be a real tampering vector. The shortcut
+  is optional - declining it does not affect the actual unlock.
+
 ## 2026-10-28 - the first real unlock applied cleanly, then got refused at the final handoff check
 
 - **The unlock itself worked.** On the reference machine's first fully clean run all the way through
