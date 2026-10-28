@@ -23,6 +23,16 @@
 
 #define MAX_HANDLES 1024
 #define MAX_RECORDS 4096
+/* A second GPU's own UEFI GOP driver can take longer to finish option-ROM init than the
+ * primary console's, especially after a hard power loss rather than a graceful shutdown
+ * (PCIe link training and ROM shadowing timing differ). Found 2026-10-28 on the reference
+ * machine: a real power loss left only one of the two expected GOP handles registered at
+ * the moment Displays() ran, so the strict topology check correctly, but prematurely,
+ * refused. This bounds how long the first discovery pass waits for both GPUs' GOP drivers
+ * to appear before giving up - it changes nothing about WHAT is validated (every identity,
+ * PCI, and driver-binding check stays exactly as strict), only how long we wait first. */
+#define GU_CONSOLE_GOP_RETRIES 15
+#define GU_CONSOLE_GOP_RETRY_STALL_US 200000u
 typedef struct {
   EFI_HANDLE Handle,Agent,Controller;
   EFI_GUID Protocol;
@@ -392,6 +402,19 @@ EFI_STATUS GuPrepareConsole(EFI_SYSTEM_TABLE *t,GU_PREPARE_LOG log,VOID *context
   p.KeyReset=(UINTN)t->ConIn->Reset;p.KeyRead=(UINTN)t->ConIn->ReadKeyStroke;p.KeyWait=t->ConIn->WaitForKey;
 #endif
   EFI_STATUS s=Displays(t,&p,TRUE);
+  /* See GU_CONSOLE_GOP_RETRIES above: only the first discovery pass retries, and only on
+   * EFI_UNSUPPORTED (never on a hard error), so a genuinely wrong or missing GPU still
+   * fails exactly as before, just after this grace period instead of immediately. */
+  for(UINTN retry=0;s==EFI_UNSUPPORTED && retry<GU_CONSOLE_GOP_RETRIES;retry++) {
+    bs->Stall(GU_CONSOLE_GOP_RETRY_STALL_US);
+    p=(PLAN){0};
+    p.Console=t->ConsoleOutHandle;p.Input=t->ConsoleInHandle;p.Error=t->StandardErrorHandle;
+    p.ConsoleText=t->ConOut;p.ErrorText=t->StdErr;p.Keys=t->ConIn;
+#ifdef GU_SINGLE_RTX_CONSOLE
+    p.KeyReset=(UINTN)t->ConIn->Reset;p.KeyRead=(UINTN)t->ConIn->ReadKeyStroke;p.KeyWait=t->ConIn->WaitForKey;
+#endif
+    s=Displays(t,&p,TRUE);
+  }
   if(s==EFI_SUCCESS)s=Snapshot(bs,&original);
   if(s==EFI_SUCCESS)s=Consumers(t,&p,&original);
   if(s==EFI_SUCCESS)s=Alive(t,&p);

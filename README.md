@@ -65,6 +65,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - console-prepare retries before refusing a GPU's GOP as missing after a hard power loss
+
+On a dual-GPU setup, a real power loss (not just a PC restart - the monitor losing power too) can leave the
+non-console GPU's own firmware graphics driver still initializing when the pre-unlock safety check first looks
+for it, since a hard power cycle changes PCIe link-training timing compared to a graceful shutdown. That check
+now waits up to 3 seconds for both GPUs to be ready before concluding one is actually missing. Nothing about
+what the check validates got looser - a genuinely wrong or missing GPU still gets refused exactly as before.
+
 ### 2026-10-28 - re-enabling every-boot mode no longer inherits a stale circuit-breaker trip
 
 Turning every-boot mode back on after it had been off used to inherit whatever circuit-breaker state was left

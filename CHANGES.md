@@ -1,5 +1,29 @@
 # Changes
 
+## 2026-10-28 - console-prepare retries before refusing a GPU's GOP as missing after a hard power loss
+
+- Found on the reference machine after a real power loss: `GuPrepareConsole`'s first discovery pass
+  (`internal-boot/boot/prepare-console.c`) requires both GPUs' own UEFI GOP (Graphics Output Protocol)
+  handles to be registered before it will validate anything - the dual-console topology check needs
+  `count>=2`. Diagnostic capture of the failed boot confirmed both GPUs were present at the PCI level
+  (both bus addresses, both device IDs, config space intact) but only ONE GOP handle existed on the
+  system at that moment: the console-driving card's GOP had come up, the target card's own GOP had
+  not finished option-ROM initialization yet. A hard power loss changes PCIe link training and ROM
+  shadowing timing compared to a graceful shutdown, so a secondary (non-console) GPU's GOP driver can
+  genuinely take longer to appear - this was not a wrong-hardware or corrupted-state condition, just a
+  boot-time race the check wasn't giving any time to resolve before concluding failure.
+- Fixed: the first discovery pass now retries up to 15 times, 200ms apart (3 seconds worst case),
+  specifically and only on `EFI_UNSUPPORTED` from that pass - never on a hard error, and never on any
+  later verification pass. This changes nothing about WHAT is validated: every PCI identity check,
+  driver-binding check, and topology match stays exactly as strict as before. It only gives a
+  genuinely-still-initializing second GPU a bounded grace period before the check gives up, instead of
+  failing on the very first look. A real missing or wrong GPU still fails exactly as before, just after
+  the grace period instead of immediately.
+- Verified: the change compiles clean (`-Wall -Wextra -Werror`) into the real deployable automatic-
+  unlock EFI (`build-automatic.ps1`, PE-verified), and the full host-mock test suite still passes
+  everything it did before (this file isn't host-testable itself - it needs real UEFI GOP handles -
+  but nothing else regressed).
+
 ## 2026-10-28 - re-enabling every-boot mode no longer inherits a stale circuit-breaker trip
 
 - Found on the reference machine: every-boot mode's circuit breaker (added 2026-10-26) correctly
