@@ -65,6 +65,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - two installer bugs found live while updating in place, both fixed
+
+The installer could get stuck thinking its own diagnostic or first-unlock boot "hasn't happened yet" when
+every-boot mode's own background task happened to queue an unrelated boot at the same time - fixed to check
+for its own actual result first. Separately, a background self-check during the install could hang
+indefinitely waiting for keyboard input nothing was ever going to provide - fixed to fail fast instead, as
+it was always supposed to.
+
 ### 2026-10-28 - the stuck-notification's Repair and "No, turn it off" buttons never actually worked
 
 Clicking Repair (or "No, turn it off") on the every-boot-stuck notification, and approving its permission prompt,

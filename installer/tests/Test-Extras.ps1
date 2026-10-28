@@ -276,9 +276,13 @@ try {
  MakeRun 'AUTO000011' 'FINAL status=8000000000000007 stage=gfw attempted=0 clean=0'
  $r = Invoke-Phase-extra2-collect $s (Opt)
  ExpectTrue 'a failed run puts the version with the Esc windows back' (($r.Stop -like '*Esc windows was put back*') -and ((BootHash 'EFI\BOOT\BOOTX64.EFI') -eq $stdHash) -and ($s.Automatic.NoEsc -eq $false))
+ # AUTO000011 (made just above) must count as already-known here, or it would look like a fresh
+ # report on its own and this "still queued, nothing new yet" case would no longer be testing what
+ # it says it tests.
+ $s.RunFoldersBefore = @('AUTO000010', 'AUTO000011')
  $script:IsQueued = $true
  ExpectTrue 'still queued: wait' ((Invoke-Phase-extra2-collect $s (Opt)).Stop -like '*restart needed*')
- $script:IsQueued = $false; $s.RunFoldersBefore = @('AUTO000010', 'AUTO000011')
+ $script:IsQueued = $false
  Set-Answers @('N')
  $r = Invoke-Phase-extra2-collect $s (Opt)
  ExpectTrue 'no report, no retry: Esc version back' (($r.Stop -like '*left no report*') -and ((BootHash 'EFI\BOOT\BOOTX64.EFI') -eq $stdHash))

@@ -1,5 +1,37 @@
 # Changes
 
+## 2026-10-28 - two installer bugs found live while updating in place on the reference machine, both fixed
+
+- **The diagnostic and first-unlock "has it run yet" checks were blind to who queued the boot.**
+  `Test-QueuedBoot` (`installer/BootEntry.ps1`) only checks whether the firmware's single one-time-
+  boot slot has anything queued at all - it was never able to tell its own queued boot apart from an
+  unrelated one. Every-boot mode's own startup task (`internal-boot\Arm-NextBoot.ps1`) queues and
+  consumes that exact same slot completely independently. Hit live: the installer's diag-collect phase
+  queued a diagnostic boot, it ran and left its log, but every-boot mode's task then re-armed a real
+  unlock boot for an unrelated reason - so the installer, relaunched to collect its already-finished
+  diagnostic, saw a boot queued and concluded its own hadn't happened yet, over and over. Fixed in
+  `Invoke-Phase-diag-collect`, `Invoke-Phase-unlock-collect` (`installer/Main.ps1`) and the shared
+  `Get-ExtraRunOutcome` (`installer/Extras.ps1`, backs the optional-extras and update-in-place
+  collect phases too): each now checks for its own actual new report or log first, and only falls
+  back to `Test-QueuedBoot` - to tell "still waiting" apart from "ran and left nothing" - when no
+  report exists yet. A real new report now always wins over an unrelated queued boot, whatever else
+  queued it.
+- **A background host-test step could hang forever waiting for keyboard input that could never come.**
+  `tests/test_stock_selection.py` proves `build.ps1`/`test-all.ps1` reject bad arguments by invoking
+  them with mandatory parameters deliberately left out - but without `-NonInteractive`, PowerShell's
+  normal response to a missing mandatory parameter is to prompt on stdin for it, not fail. That stayed
+  invisible running from an ordinary console (stdin closed/non-interactive, so the prompt fails fast
+  instead of blocking) until it hung for real, live, deep inside a UAC-elevated GUI installer's process
+  chain during an update-in-place run: the inherited stdin handle there was open but nothing was ever
+  going to write to it, and the prompt blocked indefinitely with no console the person could type into.
+  Fixed: added `-NonInteractive`, which makes every one of these intentionally-invalid calls fail
+  immediately, exactly as the test already expected.
+- Verified: reran the specific hung command standalone to confirm the exact missing-mandatory-
+  parameter prompt is the mechanism, confirmed `-NonInteractive` fixes it, then ran the complete
+  negative-test script (19 compile-time + 14 build/test parameter-rejection cases) clean. Full
+  installer test suite: 1052 of 1052 relevant tests pass (one unrelated, pre-existing local test-
+  fixture ACL failure on this machine, reproduces identically with or without these changes).
+
 ## 2026-10-28 - the stuck-notification's Repair and "No, turn it off" buttons never actually worked
 
 - Found live, on the reference machine, while testing the console-prepare fix below: clicking Repair on

@@ -38,7 +38,18 @@ for script in ('build.ps1', 'test-all.ps1'):
                   ['-StockProfile', 'entryLatchedSs1Preserve'],
                   ['-StockProfile', 'entryLatchedSs1Full'],
                  ['-ExperimentalUnlock', '-StockProfile', '']):
-        result = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy',
+        # -NonInteractive is load-bearing, not cosmetic: every case here is missing a mandatory
+        # parameter (Capture/Prom/ColdCapture) on purpose, to prove the script rejects it. Without
+        # -NonInteractive, PowerShell's normal behavior for a missing mandatory parameter is to
+        # prompt on stdin for it, not fail - usually invisible here because capture_output=True still
+        # leaves stdin inherited from this process, and that is closed/non-interactive when this
+        # script itself runs from an ordinary console. Found 2026-10-28: run instead from deep inside
+        # a UAC-elevated GUI installer's process chain, that inherited stdin is a live but never-fed
+        # handle, and the prompt blocks forever with no console the person can type into - a real
+        # hang on the reference machine, not a theoretical one. -NonInteractive makes PowerShell
+        # treat the missing parameter as an immediate error instead, which is what every case here
+        # already expects via the assert below.
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy',
                                  'Bypass', '-File', str(ROOT / script)] + args,
                                 cwd=ROOT, text=True, capture_output=True)
         assert result.returncode != 0, (script, args, result.stdout, result.stderr)

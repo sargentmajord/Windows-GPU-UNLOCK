@@ -154,10 +154,16 @@ function Invoke-Phase-diag-collect($State, $Opt) {
   Write-Plain 'DRY RUN ends here: the real run restarts the PC, then collects the diagnostic''s log. (Use -CaptureFolder to rehearse the rest.)'
   return @{ Stop = 'dry run: waiting for the diagnostic' ; Resume = 'diag-collect' }
  }
- if (Test-QueuedBoot) { Write-Plain 'The diagnostic has not run yet: its boot is still queued. Restart, then run this same command again.'; return @{ Stop = 'restart needed to run the diagnostic' } }
+ # Check for the diagnostic's own new log before Test-QueuedBoot: that check only sees whether
+ # *some* one-time boot is currently queued, firmware-wide, with no way to tell whose. Every-boot
+ # mode's own startup task queues and consumes that same single slot independently (found
+ # 2026-10-28: it can re-arm a real unlock boot after this diagnostic already ran, making this
+ # otherwise-finished diagnostic look perpetually still-queued). A new log already means it ran,
+ # regardless of what else is queued now for an unrelated reason.
  $since = [datetime]::Parse($State.CaptureQueuedAt)
  $found = Get-LatestCapture $State $(if ($State.Contains('DiagFilesBefore')) { $State.DiagFilesBefore } else { $null }) $since
  if (-not $found) {
+  if (Test-QueuedBoot) { Write-Plain 'The diagnostic has not run yet: its boot is still queued. Restart, then run this same command again.'; return @{ Stop = 'restart needed to run the diagnostic' } }
   Write-Plain 'The diagnostic left no new log. Possible reasons: the restart did not happen, Secure Boot is on, or the firmware did not start the boot partition.'
   if (Ask-YesNo 'Queue the diagnostic again?') { return @{ Next = 'diag-queue' } }
   return @{ Stop = 'the diagnostic left no log' }
@@ -291,9 +297,12 @@ function Invoke-Phase-unlock-queue($State, $Opt) {
 function Invoke-Phase-unlock-collect($State, $Opt) {
  $next = if ($State.Benchmark -and $State.Benchmark.Enabled) { 'benchmark-after' } else { 'verdict' }
  if ($Opt.DryRun) { Write-Plain 'DRY RUN: the real run reads the unlock program''s report here.'; return @{ Next = $next } }
- if (Test-QueuedBoot) { Write-Plain 'The unlock has not run yet: its boot is still queued. Restart, then run this same command again.'; return @{ Stop = 'restart needed to run the first unlock' } }
+ # See the matching comment in Invoke-Phase-diag-collect: check for the actual new report before
+ # Test-QueuedBoot, which cannot tell this boot's queue apart from an unrelated one (such as
+ # every-boot mode's own startup task re-arming a boot for an entirely different reason).
  $path = Get-LatestRunReport $State $(if ($State.Contains('RunFoldersBefore')) { $State.RunFoldersBefore } else { $null }) ([datetime]::Parse($State.UnlockQueuedAt))
  if (-not $path) {
+  if (Test-QueuedBoot) { Write-Plain 'The unlock has not run yet: its boot is still queued. Restart, then run this same command again.'; return @{ Stop = 'restart needed to run the first unlock' } }
   Write-Plain 'The unlock program left no new report. Possible reasons: the restart did not happen, or the firmware did not start the boot partition.'
   if (Ask-YesNo 'Queue the unlock again?') { return @{ Next = 'unlock-queue' } }
   return @{ Stop = 'the unlock program left no report' }

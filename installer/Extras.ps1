@@ -104,11 +104,16 @@ function Invoke-ExtraQueue($State, $Opt, [string]$Reason, [string]$ResumePhase, 
 }
 
 # Returns @{ Kind = Waiting | NoReport | Report; Report = <Read-RunReport result> }
+# Checks for the actual new report before Test-QueuedBoot: that only sees whether the firmware's
+# single one-time-boot slot has anything queued right now, firmware-wide, with no way to tell
+# whose - every-boot mode's own startup task can independently re-arm that same slot for an
+# unrelated reason. A report that already exists means this run finished, no matter what else is
+# queued now.
 function Get-ExtraRunOutcome($State) {
- if (Test-QueuedBoot) { return @{ Kind = 'Waiting' } }
  $path = Get-LatestRunReport $State $(if ($State.Contains('RunFoldersBefore')) { $State.RunFoldersBefore } else { $null }) ([datetime]::Parse($State.UnlockQueuedAt))
- if (-not $path) { return @{ Kind = 'NoReport' } }
- @{ Kind = 'Report'; Report = (Read-RunReport $path); Path = $path }
+ if ($path) { return @{ Kind = 'Report'; Report = (Read-RunReport $path); Path = $path } }
+ if (Test-QueuedBoot) { return @{ Kind = 'Waiting' } }
+ @{ Kind = 'NoReport' }
 }
 
 # --- Extra 1 ---
