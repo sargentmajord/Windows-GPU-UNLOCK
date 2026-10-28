@@ -45,6 +45,11 @@ static void Check(int condition,const char *name) {
 }
 static EFI_STATUS EFIAPI Allocate(EFI_MEMORY_TYPE type,UINTN n,VOID **p) {(void)type;*p=malloc(n);return *p?EFI_SUCCESS:EFI_OUT_OF_RESOURCES;}
 static EFI_STATUS EFIAPI Free(VOID *p) {free(p);return EFI_SUCCESS;}
+/* No-op: the GOP-discovery retry added 2026-10-28 calls bs->Stall. A real wait here would make every
+ * negative scenario below (most of which hit that retry path once before failing closed) burn up to
+ * GU_CONSOLE_GOP_RETRIES*GU_CONSOLE_GOP_RETRY_STALL_US of real wall-clock time for nothing; a host
+ * test replays a fixed, already-known graph, so there is nothing a real wait could ever discover. */
+static EFI_STATUS EFIAPI Stall(UINTN us) {(void)us;return EFI_SUCCESS;}
 static EFI_TPL EFIAPI Raise(EFI_TPL x) {(void)x;return TPL_APPLICATION;}
 static VOID EFIAPI Restore(EFI_TPL x) {(void)x;}
 static EFI_STATUS EFIAPI Locate(EFI_LOCATE_SEARCH_TYPE search,EFI_GUID *g,VOID *key,UINTN *n,EFI_HANDLE **out) {
@@ -199,7 +204,7 @@ static EFI_STATUS Run(int scenario) {
   bs=(EFI_BOOT_SERVICES){0};t=(EFI_SYSTEM_TABLE){0};LastTable=&t;
   bs.AllocatePool=Allocate;bs.FreePool=Free;bs.RaiseTPL=Raise;bs.RestoreTPL=Restore;
   bs.LocateHandleBuffer=Locate;bs.ProtocolsPerHandle=Protocols;bs.OpenProtocolInformation=Opens;
-  bs.HandleProtocol=Handle;bs.LocateDevicePath=FindPci;bs.DisconnectController=Disconnect;
+  bs.HandleProtocol=Handle;bs.LocateDevicePath=FindPci;bs.DisconnectController=Disconnect;bs.Stall=Stall;
   OtherInfo=(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION){0};OtherInfo.HorizontalResolution=1920;OtherInfo.VerticalResolution=1080;OtherInfo.PixelsPerScanLine=1920;
   RtxInfo=OtherInfo;
   OtherMode=(EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE){0};OtherMode.MaxMode=9;OtherMode.Info=&OtherInfo;OtherMode.SizeOfInfo=sizeof(OtherInfo);OtherMode.FrameBufferBase=0xfce0000000;OtherMode.FrameBufferSize=1920*1080*4;

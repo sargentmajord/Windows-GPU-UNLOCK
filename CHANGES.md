@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-10-28 - the console-prepare GOP-retry fix crashed its own host test (null function pointer)
+
+- The GOP-discovery retry added earlier today calls `bs->Stall(...)`. `tests/test_console.c`'s mocked
+  `EFI_BOOT_SERVICES` never set `Stall` - a null function pointer - so any negative-test scenario that
+  reached the retry path (most of them; that is the whole point of "negative case fails closed") now
+  crashed instead of returning cleanly, which is exactly what the earlier `-Werror`-clean build and
+  `test-all.ps1` pass could never have caught: `test_console.c` isn't part of that suite, it is its own
+  script (`test-console.ps1`), and it was never re-run after the retry change. Found live, the first
+  time the real installer ran its full host-test plan against a fresh capture rather than a cached one.
+- Fixed: added a no-op `Stall` mock (`tests/test_console.c`) - a host test replays a fixed, already-
+  known graph, so a real wait could never discover anything a no-op wouldn't; every negative scenario
+  still correctly fails closed on the first or last retry attempt exactly as before, now without
+  crashing to get there.
+- Verified: confirmed every other host-test source file for anything that reaches `GuPrepareConsole`
+  or includes `prepare-console.c`/`full-release.c` - `test_console.c` was the only one. Rebuilt and ran
+  it against the reference machine's real fresh capture from this morning: 351 checks pass.
+
 ## 2026-10-28 - two installer bugs found live while updating in place on the reference machine, both fixed
 
 - **The diagnostic and first-unlock "has it run yet" checks were blind to who queued the boot.**

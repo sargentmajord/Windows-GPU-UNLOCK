@@ -65,6 +65,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - fixed a crash the console-prepare GOP-retry fix introduced in its own host test
+
+The GOP-discovery retry added earlier the same day called a function the test's mock environment never
+provided, crashing the one host test that exercises this code instead of failing it cleanly. Found live
+the first time the real installer tested a fresh capture; fixed, and reran against that exact capture
+to confirm.
+
 ### 2026-10-28 - two installer bugs found live while updating in place, both fixed
 
 The installer could get stuck thinking its own diagnostic or first-unlock boot "hasn't happened yet" when
