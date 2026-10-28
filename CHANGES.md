@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-10-28 - A failed Start menu shortcut used to stop the whole install, with no visible way out
+
+- Found live: on a machine where the shortcut fails (an admin/ACL problem on that one PC, same as the one
+  this project already hit on its own reference machine), `New-UnlockShortcut` throws, and neither place
+  that calls it (`Invoke-Phase-schedule` in `Main.ps1`, `Invoke-Phase-extra1-shortcut` in `Extras.ps1`) had
+  anything catching it - the whole install just stopped with a raw error. Because the shortcut step hadn't
+  advanced the saved phase, resuming landed on the exact same question and failed the exact same way every
+  time; the only way out was realizing, unprompted, that answering "No" to "create the shortcut?" the
+  second time around would skip it instead of retrying it. Nothing told the person that.
+- Fixed by wrapping both calls in a try/catch: a failure is now reported in plain language ("the shortcut
+  was not made: <reason>... this is optional and does not affect the unlock itself") and the install
+  continues on its own, the same way the startup-task step right next to it (`Enable-EveryBoot`, same file)
+  already handled its own failures - one of the two call sites was just missing the pattern the other one
+  already used.
+- Verified: `Run-AllTests.ps1`, 1161 of 1161, run elevated so `Test-Schedule.ps1` and `Test-Secure.ps1`
+  (both need real elevation) actually ran rather than skipping.
+
 ## 2026-10-28 - Two more fixes found live during a second real power loss: a stuck build, and a GOP race that outgrew its own fix
 
 - **`internal-boot/boot/prepare-console.c`**: a real hard power loss on the reference machine hit `HANDOFF

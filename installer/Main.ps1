@@ -395,9 +395,14 @@ function Invoke-Phase-schedule($State, $Opt) {
  if (Ask-YesNo 'Create the shortcut "Unlock my GPU on next boot" in the Start menu (all users; only administrators can change it)?') {
   Write-Plain '  A copy on the desktop is easier to find, but any program running as you can edit a desktop shortcut, and an approved click would then run what it was changed to as administrator.'
   $wantDesktopCopy = Ask-YesNo 'Also put a copy on the desktop?'
-  $r = New-UnlockShortcut $State $mode -Desktop:$wantDesktopCopy -DryRun:$Opt.DryRun
-  $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = $mode }
-  if (-not $Opt.DryRun) { Write-Plain ('The shortcut is in the Start menu: search for "' + 'Unlock my GPU on next boot' + '".') }
+  try {
+   $r = New-UnlockShortcut $State $mode -Desktop:$wantDesktopCopy -DryRun:$Opt.DryRun
+   $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = $mode }
+   if (-not $Opt.DryRun) { Write-Plain ('The shortcut is in the Start menu: search for "' + 'Unlock my GPU on next boot' + '".') }
+  } catch {
+   Write-Plain ('The shortcut was not made: ' + $_.Exception.Message)
+   Write-Plain '  This is optional and does not affect the unlock itself. Continuing without it; to unlock again after a power-off, run this installer again.'
+  }
  } else {
   Write-Plain 'No shortcut was made. To unlock again after a power-off, run this installer again.'
  }

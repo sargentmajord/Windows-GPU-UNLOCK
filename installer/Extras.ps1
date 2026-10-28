@@ -204,8 +204,10 @@ function Invoke-Phase-extra1-shortcut($State, $Opt) {
  $links = if ($State.Contains('Shortcut') -and $State.Shortcut) { @($State.Shortcut.Links) } else { @() }
  if ($links.Count -or $Opt.DryRun) {
   $withDesktop = ($links.Count -gt 1)
-  $r = New-UnlockShortcut $State 'automatic' -Desktop:$withDesktop -DryRun:$Opt.DryRun
-  if (-not $Opt.DryRun) { $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = 'automatic' }; Write-Plain 'The shortcut "Unlock my GPU on next boot" now says that no key is needed.' }
+  try {
+   $r = New-UnlockShortcut $State 'automatic' -Desktop:$withDesktop -DryRun:$Opt.DryRun
+   if (-not $Opt.DryRun) { $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = 'automatic' }; Write-Plain 'The shortcut "Unlock my GPU on next boot" now says that no key is needed.' }
+  } catch { Write-Plain ('The shortcut could not be updated: ' + $_.Exception.Message) }
  }
  if (-not $Opt.DryRun -and ($State.Contains('Schedule') -and $State.Schedule -and $State.Schedule.Mode -eq 'EveryBoot')) { return @{ Next = 'extra2-offer' } }
  if (Ask-EveryBoot) {

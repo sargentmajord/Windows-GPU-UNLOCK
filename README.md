@@ -71,6 +71,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - A failed Start menu shortcut no longer stops the whole install
+
+If creating the optional Start menu shortcut fails (an admin/permissions problem specific to one PC), the
+installer used to stop outright with no clear way forward - restarting it just asked the same question
+again and failed the same way, with nothing explaining that declining the shortcut was the way past it.
+It now reports the failure in plain terms and continues on its own; the shortcut is optional and never
+affects the unlock itself.
+
 ### 2026-10-28 - A second real power loss found a gap in the previous fix, plus a genuinely fresh-install-only bug
 
 The boot-safety fix from earlier today only re-tried its first check after a hard power loss; a second
