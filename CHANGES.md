@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-10-28 - re-enabling every-boot mode no longer inherits a stale circuit-breaker trip
+
+- Found on the reference machine: every-boot mode's circuit breaker (added 2026-10-26) correctly
+  stops queuing after a run leaves no report, but `Set-UnlockSchedule.ps1 -Mode EveryBoot` never
+  cleared that stuck state on a fresh (re-)enable. Turning every-boot mode back on after it had
+  been off inherited whatever circuit-breaker state was left over from before - including a trip
+  from a session that ended days earlier - so the very first re-arm attempt could report itself
+  stuck with nothing having actually failed this time. Fixed: `-Mode EveryBoot` now deletes any
+  existing `arm-state.json` before writing the startup task and running the first arm, so an
+  explicit (re-)enable always starts from a clean slate. Confirmed on the reference machine: with
+  a real stale-stuck state left over from an earlier day, re-running `-Mode EveryBoot` produced a
+  clean "armed" log line instead of the stale "not armed: ... left no report" it produced before
+  the fix.
+
 ## 2026-10-26 - generalized the last hardcoded reference-card assumption in the host tests
 
 - `tests/test_efi_transaction.c`'s `check_fwsec_image()` asserted that any real firmware capture

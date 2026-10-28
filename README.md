@@ -65,6 +65,12 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - re-enabling every-boot mode no longer inherits a stale circuit-breaker trip
+
+Turning every-boot mode back on after it had been off used to inherit whatever circuit-breaker state was left
+over from before - including a trip from days earlier - so the very first re-arm attempt could falsely report
+itself stuck with nothing having actually failed this time. Re-enabling now always starts from a clean slate.
+
 ### 2026-10-26 - generalized the last hardcoded reference-card assumption in the host tests
 
 One of the host tests still assumed any real firmware capture it parsed must match this machine's exact numbers -
