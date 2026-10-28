@@ -28,9 +28,11 @@
  * (PCIe link training and ROM shadowing timing differ). Found 2026-10-28 on the reference
  * machine: a real power loss left only one of the two expected GOP handles registered at
  * the moment Displays() ran, so the strict topology check correctly, but prematurely,
- * refused. This bounds how long the first discovery pass waits for both GPUs' GOP drivers
- * to appear before giving up - it changes nothing about WHAT is validated (every identity,
- * PCI, and driver-binding check stays exactly as strict), only how long we wait first. */
+ * refused. This bounds how long the whole discovery-and-check chain (Displays, Snapshot,
+ * Consumers, Alive) waits for both GPUs' GOP drivers to appear before giving up - it changes
+ * nothing about WHAT is validated (every identity, PCI, and driver-binding check stays exactly
+ * as strict), only how long we wait first. Originally only Displays itself retried; widened the
+ * same day, after the same race surfaced one step later in the chain on a second power loss. */
 #define GU_CONSOLE_GOP_RETRIES 15
 #define GU_CONSOLE_GOP_RETRY_STALL_US 200000u
 typedef struct {
@@ -396,17 +398,15 @@ EFI_STATUS GuPrepareConsole(EFI_SYSTEM_TABLE *t,GU_PREPARE_LOG log,VOID *context
 #else
   static GRAPH original,current;PLAN p={0};
 #endif
-  p.Console=t->ConsoleOutHandle;p.Input=t->ConsoleInHandle;p.Error=t->StandardErrorHandle;
-  p.ConsoleText=t->ConOut;p.ErrorText=t->StdErr;p.Keys=t->ConIn;
-#ifdef GU_SINGLE_RTX_CONSOLE
-  p.KeyReset=(UINTN)t->ConIn->Reset;p.KeyRead=(UINTN)t->ConIn->ReadKeyStroke;p.KeyWait=t->ConIn->WaitForKey;
-#endif
-  EFI_STATUS s=Displays(t,&p,TRUE);
-  /* See GU_CONSOLE_GOP_RETRIES above: only the first discovery pass retries, and only on
-   * EFI_UNSUPPORTED (never on a hard error), so a genuinely wrong or missing GPU still
-   * fails exactly as before, just after this grace period instead of immediately. */
-  for(UINTN retry=0;s==EFI_UNSUPPORTED && retry<GU_CONSOLE_GOP_RETRIES;retry++) {
-    bs->Stall(GU_CONSOLE_GOP_RETRY_STALL_US);
+  EFI_STATUS s;
+  /* See GU_CONSOLE_GOP_RETRIES above: the whole discovery-and-check chain below retries together,
+   * and only on EFI_UNSUPPORTED (never on a hard error), so a genuinely wrong or missing GPU still
+   * fails exactly as before, just after this grace period instead of immediately. Originally only
+   * the first call (Displays) retried; found live 2026-10-28, after a real hard power loss, that
+   * the same slow-GOP-enumeration race can just as easily surface one step later, in Snapshot,
+   * Consumers or Alive instead of Displays itself - so the whole chain is re-attempted together,
+   * from a freshly zeroed PLAN, rather than only its first step. */
+  for(UINTN retry=0;;retry++) {
     p=(PLAN){0};
     p.Console=t->ConsoleOutHandle;p.Input=t->ConsoleInHandle;p.Error=t->StandardErrorHandle;
     p.ConsoleText=t->ConOut;p.ErrorText=t->StdErr;p.Keys=t->ConIn;
@@ -414,10 +414,12 @@ EFI_STATUS GuPrepareConsole(EFI_SYSTEM_TABLE *t,GU_PREPARE_LOG log,VOID *context
     p.KeyReset=(UINTN)t->ConIn->Reset;p.KeyRead=(UINTN)t->ConIn->ReadKeyStroke;p.KeyWait=t->ConIn->WaitForKey;
 #endif
     s=Displays(t,&p,TRUE);
+    if(s==EFI_SUCCESS)s=Snapshot(bs,&original);
+    if(s==EFI_SUCCESS)s=Consumers(t,&p,&original);
+    if(s==EFI_SUCCESS)s=Alive(t,&p);
+    if(s!=EFI_UNSUPPORTED || retry>=GU_CONSOLE_GOP_RETRIES)break;
+    bs->Stall(GU_CONSOLE_GOP_RETRY_STALL_US);
   }
-  if(s==EFI_SUCCESS)s=Snapshot(bs,&original);
-  if(s==EFI_SUCCESS)s=Consumers(t,&p,&original);
-  if(s==EFI_SUCCESS)s=Alive(t,&p);
   EFI_STATUS recorded=log(context,"console-prepare-preflight",s);
   if(s!=EFI_SUCCESS || recorded!=EFI_SUCCESS)return s==EFI_SUCCESS?recorded:s;
 #if !GU_CONSOLE_AGGREGATE

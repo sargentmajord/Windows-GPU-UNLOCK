@@ -104,6 +104,7 @@ function Invoke-Phase-make-partition($State, $Opt) {
 
 function Invoke-Phase-diag-build($State, $Opt) {
  Write-Plain 'Building the read-only diagnostic for your card...'
+ [void](New-PlatformConfig $State -DryRun:$Opt.DryRun)
  $built = Build-Diagnostic $State (Get-ToolStatus) -DryRun:$Opt.DryRun
  $State.Diagnostic = [ordered]@{ Path = $built.Path; Sha256 = $built.Sha256 }
  @{ Next = 'diag-stage' }

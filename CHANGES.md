@@ -1,5 +1,31 @@
 # Changes
 
+## 2026-10-28 - Two more fixes found live during a second real power loss: a stuck build, and a GOP race that outgrew its own fix
+
+- **`internal-boot/boot/prepare-console.c`**: a real hard power loss on the reference machine hit `HANDOFF
+  STOPPED` at `console-prepare-preflight` with `EFI_UNSUPPORTED` - the exact slow-second-GPU-GOP race an
+  earlier fix today was built for, except that fix only retried the first call (`Displays`); this time the
+  same race apparently surfaced one step later, in `Snapshot`, `Consumers` or `Alive`, none of which were
+  covered. Widened the existing retry loop to cover the whole discovery-and-check chain together, re-run
+  from a freshly zeroed `PLAN` each attempt, instead of only its first step - same bound (15 retries, 200ms
+  apart, only on `EFI_UNSUPPORTED`, same as before), just covering all four checks instead of one.
+  Verified against this machine's own real captured hardware data: `test-console.ps1` (366 checks) and
+  `test-full.ps1` (9032 + 39 checks), both passing.
+- **`installer/Main.ps1`**: on the very first clean install after today's rollback fix, step 8 (building the
+  read-only diagnostic) failed outright - `platform-config.h file not found`. Root cause: that file is only
+  generated inside the later `build` phase (step 15), but the diagnostic needs it seven steps earlier; every
+  prior run that happened to work was quietly relying on a stale copy left over from earlier development on
+  this machine, never on a truly clean checkout. Fixed by generating it at the start of `diag-build` too
+  (the existing `build`-phase call is untouched, so it's written twice, harmlessly, with the same content).
+  Verified: `Run-AllTests.ps1`, 1054 of 1055 (the one failure is the known non-elevated Test-Schedule skip).
+- Also, while chasing the Start-menu-shortcut refusal again on this run: the machine's actual Start Menu
+  folder had two personal-account ACEs baked directly into its permissions (one for a long-deleted account
+  this machine had RID 1000, and - more interestingly - one for the current administrator's own account).
+  Removed both by hand (Administrators-group membership already grants everything the personal one did, so
+  this changes no actual access) - not a code fix, just real drift on this one machine, cleaned up so the
+  install can actually exercise the shortcut step instead of always hitting this machine's own pre-existing
+  condition.
+
 ## 2026-10-28 - Roll back left its own every-boot state file behind
 
 - Found live, on the first full clean end-to-end run: Roll back correctly removed the "unlock at every

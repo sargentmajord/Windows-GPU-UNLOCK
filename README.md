@@ -71,6 +71,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-28 - A second real power loss found a gap in the previous fix, plus a genuinely fresh-install-only bug
+
+The boot-safety fix from earlier today only re-tried its first check after a hard power loss; a second
+power loss showed the same timing race can surface in one of the later checks instead, so all of them now
+get the same retry. Separately, a truly from-scratch install (no leftover files from earlier development)
+hit a real bug building the read-only diagnostic - one generated file was only being created later than it
+was first needed - now fixed.
+
 ### 2026-10-28 - Roll back now cleans up a small file it used to leave behind
 
 Found on the first full clean install-to-rollback run: Roll back correctly removed the "unlock at every
