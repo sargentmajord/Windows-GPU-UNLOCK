@@ -53,26 +53,29 @@ support should be needed: the script follows general safety rules, not a list of
     unattended restart option. Syntax per
     [Microsoft's shutdown reference](https://learn.microsoft.com/windows-server/administration/windows-commands/shutdown).
 11. **Optional automatic resume after the restart, only with the user's consent.** At the first restart the script asks "Continue
-    automatically when you log back in? (Y/N)". Y writes one value under `HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce` that
-    starts the same command with its saved state. Windows runs a RunOnce entry once at the next log-on and removes it
-    ([Microsoft: Run and RunOnce keys](https://learn.microsoft.com/en-us/windows/desktop/SetupApi/run-and-runonce-registry-keys)); the script
-    uses the `!` prefix so the entry is kept until the command finishes successfully. It is a current-user registry value, not a scheduled
-    task, service or startup file, and it is not elevated by itself: the resumed script asks for administrator approval again through
-    Windows' own prompt. Rules: (a) it is created only after a Y, never silently; (b) every phase that needs another restart registers a
+    automatically when you log back in? (Y/N)". Y registers one current-user scheduled task ("at log on") that starts the same command
+    with its saved state. It is not elevated by itself: the resumed script asks for administrator approval again through Windows' own
+    prompt. Rules: (a) it is created only after a Y, never silently; (b) every phase that needs another restart registers a
     fresh one, and the final phase deletes any remaining entry, prints "All done", waits for Enter and exits; (c) a failure or refusal
     deletes it too and leaves the report file, so a broken install never relaunches itself on every log-in; (d) `Rollback` (requirement 12) and the state-file
     cleanup remove it, and the script checks for and reports a leftover entry at the start of every run; (e) N means nothing is
     registered and the user runs the same command by hand.
+    A plain `HKCU\...\RunOnce` registry value did this until 2026-10-30, per
+    [Microsoft: Run and RunOnce keys](https://learn.microsoft.com/en-us/windows/desktop/SetupApi/run-and-runonce-registry-keys); moved to a
+    scheduled task after it was found, repeatedly, consuming itself at log-on with nothing - no window, no console, no trace of any kind -
+    ever actually running, while the identical command run by hand always worked. RunOnce keeps no log of its own to say why a launch
+    failed; Task Scheduler does. An "at log on" trigger fires every log-on, not once, so the task removes itself the same way the RunOnce
+    value used to.
     **The resumed script always opens a visible window and asks first.** After log-in it shows a dialog ("Windows GPU Unlock installer: step 3
     of 6 is ready. Continue?" with Yes and No), using the .NET message box that ships with Windows PowerShell, with a console prompt as the
     fallback. It changes nothing until the user clicks Yes (Windows then shows its administrator prompt). No closes it, deletes the
-    RunOnce entry and prints how to continue by hand later. It never continues in a hidden window. The dialog also has a **Roll back** button (requirement 12).
+    resume task and prints how to continue by hand later. It never continues in a hidden window. The dialog also has a **Roll back** button (requirement 12).
 
 12. **Rollback at any point.** Every run offers "Continue", "Roll back" and "Exit" (the resume dialog has the same three choices), and
     `Install-GpuUnlock.ps1 -Rollback` does it directly. The installer keeps a journal of every change it makes, written before each change
     (what, where, and the hash or previous value), so rollback removes exactly what the installer made and nothing else. It undoes, in
     reverse order and only for the phases that actually ran:
-    - the resume entry (RunOnce) and any pending one-time boot (BootNext);
+    - the resume entry (a scheduled task) and any pending one-time boot (BootNext);
     - the Windows startup task and its generated files (every-boot mode); the firmware boot order and the Windows boot entry are never changed, so there is
       nothing to restore there (the backup is kept, and rollback checks that Windows is still first);
     - the Fast Startup setting, restored to its saved value;

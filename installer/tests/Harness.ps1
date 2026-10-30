@@ -39,11 +39,11 @@ function New-TestRoot {
 }
 function Remove-TestRoot([string]$Path) { if ($Path -and $Path.StartsWith([IO.Path]::GetTempPath()) -and (Test-Path -LiteralPath $Path)) { Remove-Item -LiteralPath $Path -Recurse -Force } }
 
-# The automatic-resume entry (a real current-user registry value) and the choice window are replaced: tests never touch the registry or show a window.
-$script:FakeRunOnce = $null
-function Get-SysRunOnceValue { $script:FakeRunOnce }
-function Set-SysRunOnceValue([string]$Command) { $script:FakeRunOnce = $Command }
-function Remove-SysRunOnceValue { $script:FakeRunOnce = $null }
+# The automatic-resume entry (a real current-user scheduled task) and the choice window are replaced: tests never touch Task Scheduler or show a window.
+$script:FakeResumeTask = $null
+function Get-SysResumeTask { $script:FakeResumeTask }
+function Set-SysResumeTask([string]$ScriptPath) { $script:FakeResumeTask = (Get-ResumeCommand $ScriptPath) }
+function Remove-SysResumeTask { $script:FakeResumeTask = $null }
 function Show-SysChoiceDialog([string]$Title, [string]$Text, [string[]]$Buttons) { $null }
 
 function Complete-Tests {

@@ -1,5 +1,6 @@
 # Restart with optional automatic resume after login, the resume dialog and the start menu (requirements 10, 11, 12).
-# The registry value and the window are replaced by the harness (a fake store and a stub); the real window code is only built here, never shown.
+# The scheduled task and the window are replaced by the harness (a fake store and a stub); the real window code is only built here, never
+# shown, and the real task-registration code is exercised separately, further down, only when elevated.
 $base = Split-Path -Parent $PSScriptRoot
 foreach ($m in 'Ui', 'State', 'Checks', 'CardSelect', 'Tools', 'BootPartition', 'Backup', 'Plan', 'BootEntry', 'Capture', 'Firmware', 'BuildTest', 'Benchmark', 'Unlock', 'Schedule', 'Resume', 'Rollback', 'Extras', 'Status', 'Main') { . (Join-Path $base "$m.ps1") }
 . (Join-Path $PSScriptRoot 'Harness.ps1')
@@ -10,12 +11,11 @@ $script:Restarts = 0; $script:RestartCode = 0
 function Invoke-SysRestart([int]$Seconds, [string]$Reason) { $script:Restarts++; $script:RestartCode }
 $scriptPath = 'C:\fake\Install-GpuUnlock.ps1'
 
-# ---------- the command line of the entry ----------
+# ---------- the command the registered task runs ----------
 $cmd = Get-ResumeCommand $scriptPath
-ExpectTrue 'the entry starts with ! so Windows keeps it until the command ends' ($cmd.StartsWith('!'))
 ExpectTrue 'it starts the installer with -Resume' ($cmd -like '*-File "C:\fake\Install-GpuUnlock.ps1" -Resume')
-ExpectTrue 'it is not hidden and not elevated by itself' (($cmd -notlike '*-WindowStyle*') -and ($cmd -notlike '*RunAs*'))
-Expect 'it lives under the current user''s RunOnce key (not a task, service or startup file)' $script:ResumeKey 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+ExpectTrue 'it is not hidden by itself' ($cmd -notlike '*-WindowStyle*')
+Expect 'the resume entry has its own task name (not a registry value, service or startup file)' $script:ResumeTaskName 'WindowsGPUUnlockResume'
 
 $t = New-TestRoot
 try {
@@ -24,7 +24,7 @@ try {
  Set-ResumeEntry $scriptPath
  ExpectTrue 'the entry is set' (Test-ResumeEntry)
  $j = @(Read-Journal | Where-Object Action -eq 'register automatic resume after login')
- ExpectTrue 'and journaled before and after (so Roll back can see it)' (($j.Count -eq 1) -and $j[0].Status -eq 'done' -and ($j[0].Target -like '*RunOnce*'))
+ ExpectTrue 'and journaled before and after (so Roll back can see it)' (($j.Count -eq 1) -and $j[0].Status -eq 'done' -and ($j[0].Target -like '*WindowsGPUUnlockResume*'))
  Remove-ResumeEntry; Remove-ResumeEntry
  Expect 'removing twice is harmless' (Test-ResumeEntry) $false
 
@@ -135,6 +135,34 @@ try {
  ExpectTrue 'finishing removes any remaining entry' ($r.Done -and -not (Test-ResumeEntry))
  Remove-Item Function:\Invoke-Phase-zzz
 } finally { Remove-TestRoot $t }
+
+# ---------- the real scheduled task (admin only; its own dedicated task name, never the real one) ----------
+# Restores the real system calls the harness replaced above. Uses a test-only task name throughout, specifically
+# so this can never touch - or be confused with - a real resume task an in-progress install might actually have
+# pending right now.
+. (Join-Path $base 'Resume.ps1')
+if (Get-SysIsAdmin) {
+ $savedTaskName = $script:ResumeTaskName
+ $script:ResumeTaskName = 'WindowsGPUUnlockResumeTest'
+ try {
+  ExpectThrows 'the real registration refuses a test-folder path' { Set-SysResumeTask 'C:\x\gpuunlock-test-resume.ps1' } '*test folder*'
+  Expect 'nothing was registered by the refused attempt' (Get-SysResumeTask) $null
+  $realScriptPath = 'C:\fake\Install-GpuUnlock.ps1'
+  Set-SysResumeTask $realScriptPath
+  $task = Get-SysResumeTask
+  ExpectTrue 'the real task is registered' ($null -ne $task)
+  ExpectTrue 'it runs the installer with -Resume' ($task.Actions[0].Arguments -like "*-File `"$realScriptPath`" -Resume")
+  ExpectTrue 'it is not elevated by itself' ($task.Principal.RunLevel -eq 'Limited')
+  ExpectTrue 'it runs in the interactive session, not hidden' ($task.Principal.LogonType -eq 'Interactive')
+  ExpectTrue 'it is triggered at log on' ($task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger')
+  Remove-SysResumeTask
+  Expect 'removing it leaves nothing behind' (Get-SysResumeTask) $null
+  Remove-SysResumeTask   # idempotent
+ } finally {
+  $script:ResumeTaskName = $savedTaskName
+  try { Unregister-ScheduledTask -TaskName 'WindowsGPUUnlockResumeTest' -Confirm:$false -ErrorAction SilentlyContinue } catch { }
+ }
+} else { Write-Host 'skip the real scheduled-task test (needs an administrator session)' }
 
 # ---------- the real window code is built (never shown) ----------
 $canForm = $true

@@ -78,7 +78,7 @@ try {
  Expect 'one restart was started' $script:Restarts 1
  Expect 'all five answers were used' $script:Answers.Count 0
  ExpectTrue 'the automatic resume entry was registered (consent given)' (Test-ResumeEntry)
- ExpectTrue 'and it starts the installer with -Resume' ((Get-SysRunOnceValue) -like '*Install-GpuUnlock.ps1* -Resume')
+ ExpectTrue 'and it starts the installer with -Resume' ((Get-SysResumeTask) -like '*Install-GpuUnlock.ps1* -Resume')
  ExpectTrue 'the diagnostic is on the boot partition (fallback path)' (Test-Path (Join-Path $boot 'EFI\BOOT\BOOTX64.EFI'))
  ExpectTrue 'and in its own folder' (Test-Path (Join-Path $boot 'EFI\WindowsGPUUnlock\DIAGNOSTIC.EFI'))
  ExpectTrue 'the log folder exists' (Test-Path (Join-Path $boot 'RTX3060-UNLOCK'))

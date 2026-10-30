@@ -1,13 +1,18 @@
 # Restart with optional automatic resume after login, and the start menu (plan requirements 10, 11, 12).
-#  - The resume entry is ONE current-user RunOnce value, created only after an explicit Y, never silently. It only starts
+#  - The resume entry is ONE current-user scheduled task ("at log on"), created only after an explicit Y, never silently. It only starts
 #    "Install-GpuUnlock.ps1 -Resume", which opens a visible window and asks first (Continue / Not now / Roll back). Nothing changes until
 #    the user clicks Continue; Windows then shows its own administrator prompt.
-#  - The entry is removed when the resumed run starts, when a run ends without a restart, on an error, on Roll back and when the install finishes.
-#    A leftover entry is reported and removed at the start of every run, so a broken install never relaunches itself at every login.
+#  - A scheduled task, not a RunOnce registry value (used until 2026-10-30): found live, repeatedly, that the RunOnce entry could consume
+#    itself at login with nothing - no window, no console, no trace anywhere, not even in the script's own very first line - ever running.
+#    RunOnce has no logging of its own to say why. Task Scheduler does (the Microsoft-Windows-TaskScheduler/Operational log), and running
+#    the identical command by hand, every time, always worked - so the mechanism launching it, not the command itself, was the suspect.
+#  - "At log on" fires on every login, not just once, so the task has to remove itself - exactly the same place the RunOnce value used to
+#    remove itself: the entry is removed when the resumed run starts, when a run ends without a restart, on an error, on Roll back and when
+#    the install finishes. A leftover entry is reported and removed at the start of every run, so a broken install never relaunches itself
+#    at every login.
 # Needs Ui.ps1, State.ps1, BootEntry.ps1, Main.ps1 ($script:PhaseOrder).
 
-$script:ResumeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
-$script:ResumeValueName = 'WindowsGPUUnlockResume'
+$script:ResumeTaskName = 'WindowsGPUUnlockResume'
 $script:RestartStarted = $false
 
 $script:PhaseNames = [ordered]@{
@@ -27,13 +32,19 @@ $script:PhaseNames = [ordered]@{
 }
 
 # --- system calls (replaceable in tests) ---
-function Get-SysRunOnceValue { $v = Get-ItemProperty -LiteralPath $script:ResumeKey -Name $script:ResumeValueName -ErrorAction SilentlyContinue; if ($v) { [string]$v.($script:ResumeValueName) } else { $null } }
-function Set-SysRunOnceValue([string]$Command) {
- if ($Command -like '*gpuunlock-test-*') { throw 'Refusing to write a real resume entry that points into a test folder (a test forgot to replace this function).' }
- if (-not (Test-Path -LiteralPath $script:ResumeKey)) { [void](New-Item -Path $script:ResumeKey -Force) }
- [void](New-ItemProperty -LiteralPath $script:ResumeKey -Name $script:ResumeValueName -Value $Command -PropertyType String -Force)
+function Get-SysResumeTask { Get-ScheduledTask -TaskName $script:ResumeTaskName -ErrorAction SilentlyContinue }
+function Set-SysResumeTask([string]$ScriptPath) {
+ if ($ScriptPath -like '*gpuunlock-test-*') { throw 'Refusing to register a real resume task that points into a test folder (a test forgot to replace this function).' }
+ $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+ $action = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Resume' -f $ScriptPath)
+ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+ # LogonType Interactive + RunLevel Limited: runs as the signed-in user, in their own desktop session, not elevated by
+ # itself - the same as the RunOnce value it replaces. The dialog still shows first; only clicking Continue elevates.
+ $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+ Register-ScheduledTask -TaskName $script:ResumeTaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 }
-function Remove-SysRunOnceValue { Remove-ItemProperty -LiteralPath $script:ResumeKey -Name $script:ResumeValueName -ErrorAction SilentlyContinue }
+function Remove-SysResumeTask { Unregister-ScheduledTask -TaskName $script:ResumeTaskName -Confirm:$false -ErrorAction SilentlyContinue }
 
 # Shows a window with the buttons and returns the label of the one clicked, or $null when no window could be made (then the console is used).
 function Show-SysChoiceDialog([string]$Title, [string]$Text, [string[]]$Buttons) {
@@ -65,19 +76,19 @@ function New-ChoiceForm([string]$Title, [string]$Text, [string[]]$Buttons) {
 }
 
 # --- the resume entry ---
-function Test-ResumeEntry { [bool](Get-SysRunOnceValue) }
+function Test-ResumeEntry { [bool](Get-SysResumeTask) }
 
+# What the registered task runs - kept as its own function so it stays independently observable/testable.
 function Get-ResumeCommand([string]$ScriptPath) {
  $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
- '!"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Resume' -f $ps, $ScriptPath    # "!" keeps the value until the command has finished
+ '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Resume' -f $ps, $ScriptPath
 }
 
 function Set-ResumeEntry([string]$ScriptPath) {
- $cmd = Get-ResumeCommand $ScriptPath
- [void](Invoke-JournaledChange -Phase 'restart' -Action 'register automatic resume after login' -Target ($script:ResumeKey + '\' + $script:ResumeValueName) `
-  -Previous ([ordered]@{ Existed = (Test-ResumeEntry) }) -Undo 'remove the value' -Do { Set-SysRunOnceValue $cmd })
+ [void](Invoke-JournaledChange -Phase 'restart' -Action 'register automatic resume after login' -Target ('Scheduled Task\' + $script:ResumeTaskName) `
+  -Previous ([ordered]@{ Existed = (Test-ResumeEntry) }) -Undo 'remove the task' -Do { Set-SysResumeTask $ScriptPath })
 }
-function Remove-ResumeEntry { if (Test-ResumeEntry) { Remove-SysRunOnceValue } }
+function Remove-ResumeEntry { if (Test-ResumeEntry) { Remove-SysResumeTask } }
 
 # What the user sees: "step 3 of 25 (building the boot programs)".
 function Get-StepText($State) {

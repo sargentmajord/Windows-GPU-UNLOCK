@@ -1,5 +1,41 @@
 # Changes
 
+## 2026-10-30 - Replaced the automatic-resume RunOnce entry with a scheduled task
+
+- The diagnostic logging added earlier today got its answer on the very next restart: `last-launch.log` was
+  empty. Not "crashed loading a module", not "Test-DesktopAvailable failed" - nothing, not even the single
+  unconditional line written before anything else in the script could fail. No trace in the Windows Event
+  Log either. The conclusion: the process RunOnce was supposed to launch never actually started, or never
+  got far enough to execute a single line of PowerShell - a failure in how Windows invoked it, not anything
+  the script itself did. The same exact command, run by hand every single time today (manually, and later
+  through the elevated-runner scheduled task set up today for a separate reason), always worked.
+- Replaced the mechanism rather than keep guessing at RunOnce's own internals, which are undocumented enough
+  that Microsoft's own "Run and RunOnce" reference doesn't explain this kind of silent failure, and which
+  keep no log of their own to find out from. The resume entry is now one current-user scheduled task
+  ("at log on"), registered and removed through `installer/Resume.ps1`'s `Set-SysResumeTask` /
+  `Get-SysResumeTask` / `Remove-SysResumeTask` (replacing `Set-SysRunOnceValue` / `Get-SysRunOnceValue` /
+  `Remove-SysRunOnceValue`). Deliberately kept at the same safety level as before - `LogonType Interactive`,
+  `RunLevel Limited` - so nothing about when or how it elevates changes: the dialog still shows first,
+  completely unelevated, and only clicking Continue triggers Windows' own administrator prompt, exactly as
+  before. An "at log on" trigger fires on every future log-on, not once, so the task still has to remove
+  itself at the same point the RunOnce value used to (the start of `Invoke-ResumeStart`, before the dialog
+  is shown) - functionally the same "runs once" guarantee, just enforced by the script instead of by the
+  registry key's own semantics.
+- `Main.ps1`, `Rollback.ps1` and `Session.ps1` needed no changes at all: all three only ever called the
+  high-level `Test-ResumeEntry` / `Set-ResumeEntry` / `Remove-ResumeEntry` functions, never the registry
+  directly, so the whole migration stayed inside `Resume.ps1` and its tests.
+- `installer/tests/Test-Resume.ps1` gained a new admin-gated block that exercises the real
+  `Register-ScheduledTask` / `Get-ScheduledTask` / `Unregister-ScheduledTask` round trip - under its own
+  dedicated task name (`WindowsGPUUnlockResumeTest`), never the real `WindowsGPUUnlockResume` one, so a test
+  run can never collide with or disturb an actual pending resume on a machine that has one. Confirms, against
+  the real system rather than a mock: the registered action, that `RunLevel` really is `Limited` and
+  `LogonType` really is `Interactive`, and that the trigger really is an at-log-on one.
+- Verified: `Run-AllTests.ps1`, 1153 of 1153, run elevated.
+- Still to confirm: a real restart, to see whether this actually launches where RunOnce didn't. The
+  diagnostic logging from the previous entry stays in place either way, since Task Scheduler's own
+  Microsoft-Windows-TaskScheduler/Operational log is a second, independent source of truth if this doesn't
+  fully resolve it.
+
 ## 2026-10-30 - Diagnostic logging for the automatic-resume RunOnce entry that keeps launching invisibly
 
 - Not a fix - this is instrumentation, added because the actual bug has no evidence yet to fix from. The

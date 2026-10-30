@@ -65,7 +65,7 @@ function New-World([switch]$WithOriginal) {
  Stage-ManualProgram $st
  Save-InstallerState $st
  $script:Entries = 1; $script:IsQueued = $false; $script:Restarts = 0; $script:Calls.Clear(); $script:Shortcuts = @(); $script:EveryBootOn = 0; $script:EveryBootOff = 0
- $script:BuildFails = $false; $script:TestFails = $false; $script:PatchApplied = $false; $script:Git = 'C:\git\git.exe'; $script:FakeRunOnce = $null
+ $script:BuildFails = $false; $script:TestFails = $false; $script:PatchApplied = $false; $script:Git = 'C:\git\git.exe'; $script:FakeResumeTask = $null
  $script:Records = New-Object System.Collections.Queue
  [pscustomobject]@{ T = $t; State = $st }
 }

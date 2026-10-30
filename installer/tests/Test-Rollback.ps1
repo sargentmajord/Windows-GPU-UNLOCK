@@ -45,7 +45,7 @@ function New-World([switch]$WithOriginalBootFile) {
  if ($WithOriginalBootFile) { [void](New-Item -ItemType Directory (Join-Path $script:BootDir 'EFI\BOOT') -Force); Set-Content (Join-Path $script:BootDir 'EFI\BOOT\BOOTX64.EFI') 'the original program' -NoNewline }
  $script:PartGone = $false; $script:Removed = 0; $script:Resized = @(); $script:Queued = $false; $script:ClearOk = $true; $script:Disabled = 0; $script:DisableFails = $false; $script:Restarts = 0
  $script:Label = 'GPUUNLOCK'; $script:Letter = 'U'; $script:Assigned = 0; $script:CFreeAfterPartition = $false
- $script:FakeRunOnce = $null
+ $script:FakeResumeTask = $null
  $st = [ordered]@{ Version = 1; Phase = 'verdict'; BackupFolder = $bk; BootPartition = [ordered]@{ Disk = 0; Number = 3; Guid = 'guid-1'; DriveLetter = 'U'; Created = $false; ShrankC = $false } }
  [pscustomobject]@{ T = $t; Src = $src; State = $st; Backup = $bk }
 }
@@ -86,7 +86,7 @@ try {
  Set-Content (Join-Path $script:BootDir 'RTX3060-UNLOCK\DIAG01.TXT') 'log written by the diagnostic'
  Add-JournalEntry -Phase 'queue' -Action 'queue one-time boot' -Target '{entry}' -Previous ([ordered]@{ Queued = $false }) | ForEach-Object { Set-JournalStatus $_ 'done' }
  $script:Queued = $true
- Set-SysRunOnceValue 'resume command'
+ Set-SysResumeTask 'resume command'
  # work files
  $work = Get-WorkRoot
  foreach ($d in 'assets', 'benchmark', 'discovery', 'profile') { [void](New-Item -ItemType Directory (Join-Path $work $d) -Force); Set-Content (Join-Path $work "$d\f.bin") 'x' }
