@@ -78,7 +78,13 @@ function Get-ToolStatus {
   WingetId = 'Python.Python.3.12'; WingetArgs = @(); Size = 'about 30 MB'; Source = 'python.org (winget package Python.Python.3.12)'; Info = $py }
  $rows += [pscustomobject]@{ Id = 'msvc'; Name = 'Microsoft C++ Build Tools with the Windows SDK (for the host tests)'; Ok = [bool]$vc
   Detail = $(if ($vc) { 'found' } else { 'not found' })
-  WingetId = 'Microsoft.VisualStudio.2022.BuildTools'; WingetArgs = @('--override', '--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'); Size = 'several GB (roughly 3 to 7 GB) and several minutes'; Source = 'Microsoft (winget package Microsoft.VisualStudio.2022.BuildTools)'; Info = $vc }
+  # Found live, 2026-10-30: "--includeRecommended" pulls in everything Microsoft marks Recommended (not
+  # Required) for this workload - ARM64/ARM64EC cross-compilation toolsets, CMake tools, a second,
+  # Clang-based compiler for Windows (redundant: this project already brings its own LLVM separately, for
+  # the main build), test adapters, extra SDK versions. None of it is needed just to run cl.exe, link.exe
+  # and one Windows SDK - which is the whole of what this project's own builds (nvcc's host compiler, and
+  # vcvars64.bat for lld-link) actually use. Dropped it; only the Required set installs now.
+  WingetId = 'Microsoft.VisualStudio.2022.BuildTools'; WingetArgs = @('--override', '--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools'); Size = 'roughly 1 to 2 GB and a few minutes'; Source = 'Microsoft (winget package Microsoft.VisualStudio.2022.BuildTools)'; Info = $vc }
  $rows
 }
 

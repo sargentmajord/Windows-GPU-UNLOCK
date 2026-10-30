@@ -71,6 +71,15 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - A smaller Visual Studio download, and Roll back now offers to remove it afterward
+
+If you don't already have the C++ build tools the (optional) benchmark needs, the installer's automatic
+download is now roughly 1-2 GB instead of 3-7 GB - it was pulling in several components (ARM64 cross-compile
+tools, CMake, a second compiler, test tools) nothing in this project actually uses. And if the installer did
+have to install it for you, Roll back now actually offers to uninstall it again afterward, instead of just
+leaving it on your PC with a note to remove it yourself. It only ever offers this for a tool it installed
+itself - never one you already had.
+
 ### 2026-10-30 - Fixed the benchmark build failing on a newer Visual Studio update
 
 If Windows had updated Visual Studio 2022 past a certain point release, the optional benchmark step could

@@ -30,7 +30,8 @@ function Get-RollbackExplanation {
   'unchanged); checks that the boot order still has Windows first (the installer never changes it); removes the startup task; puts the',
   'Fast Startup setting back to what it was; stops the unlock from being applied at boot; and deletes the installer''s working files.',
   'It keeps the report and log files unless you tell it to delete them.',
-  'It asks you before it deletes the NVIDIA firmware files it generated, and before it gives disk space back to C: if it had shrunk it.',
+  'It asks you before it deletes the NVIDIA firmware files it generated, before it gives disk space back to C: if it had shrunk it, and',
+  'before it uninstalls any build tool it had to install because it was missing (never one you already had for something else).',
   'It never touches your Windows files, your own data, BIOS/UEFI settings or the graphics card''s stored firmware. Settings you changed yourself as a prerequisite, such as turning Secure Boot',
   'off in the BIOS, are not reversed: turn them back on yourself if you want them (some games'' anti-cheat needs Secure Boot). After you restart, the card behaves as if the installer had never run.',
   'At the end it prints a checklist of what was removed, what was already gone and what it left because you had changed it.')
@@ -264,7 +265,21 @@ function Undo-LocalFiles($State, $Entries, [switch]$DryRun) {
    Remove-WorkFolder $d.FullName ('working file ' + $d.Name) -DryRun:$DryRun
   }
  }
- foreach ($e in @($Entries | Where-Object { $_.Action -like 'install *' })) { Add-RollbackResult ('build tool ' + $e.Target) 'Kept' 'left installed; remove it in Settings > Apps if you do not need it' }
+ # Only ever journaled for a tool the installer itself installed because it was found missing - something
+ # already on the PC before the install (a developer's or enthusiast's own toolchain) never gets one of
+ # these entries at all (Resolve-Tools only installs, and only journals, what Get-ToolStatus reported as
+ # not already present), so this can never offer to remove a tool the person already had for something else.
+ foreach ($e in @($Entries | Where-Object { $_.Action -like 'install *' })) {
+  $wingetId = $e.Action -replace '^install ', ''
+  if ($DryRun) { Add-RollbackResult ('build tool ' + $e.Target) 'WouldDo' 'ask whether to keep or uninstall it'; continue }
+  Write-Plain ''
+  Write-Plain ('The installer installed {0} because it was missing and the build needed it. If you did not already have it for something else, it can be removed now.' -f $e.Target)
+  if (Ask-YesNo 'Uninstall it?') {
+   $code = Invoke-SysWinget @('uninstall', '--id', $wingetId, '--exact', '--source', 'winget', '--accept-source-agreements')
+   if ($code -eq 0) { Add-RollbackResult ('build tool ' + $e.Target) 'Removed' }
+   else { Add-RollbackResult ('build tool ' + $e.Target) 'Left' ('uninstall failed with code ' + $code + '; remove it in Settings > Apps if you still want it gone') }
+  } else { Add-RollbackResult ('build tool ' + $e.Target) 'Kept' 'left installed; remove it in Settings > Apps if you do not need it' }
+ }
 }
 
 function Write-RollbackChecklist([string]$BackupFolder) {

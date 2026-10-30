@@ -1,5 +1,33 @@
 # Changes
 
+## 2026-10-30 - Slimmed the VS Build Tools install, and Roll back now offers to uninstall what it installed
+
+- Asked directly: a random person with nothing installed is being offered a 3-7 GB Visual Studio download
+  just to run an *optional* benchmark - that is a real adoption cost worth questioning, not accepting as a
+  given.
+- `installer/Tools.ps1`'s winget install of `Microsoft.VisualStudio.2022.BuildTools` dropped
+  `--includeRecommended`. That flag pulls in everything Microsoft marks Recommended, not Required, for the
+  C++ workload - ARM64/ARM64EC cross-compilation toolsets, CMake tools, a second, Clang-based compiler for
+  Windows (redundant: this project already brings its own LLVM separately, for the main build), test
+  adapters, extra SDK versions. None of it is used anywhere in this project; only the Required set - the
+  compiler, the linker, and one Windows SDK - is what `vcvars64.bat`, `cl.exe` and `nvcc`'s host-compiler
+  calls actually need. Updated the disclosed size from "roughly 3 to 7 GB" to "roughly 1 to 2 GB" to match.
+  Caveat, stated plainly rather than overclaimed: this machine already had Visual Studio installed, so the
+  new figure is an informed estimate from Microsoft's own documented Required-vs-Recommended component
+  semantics, not a byte count measured from a genuinely fresh install here - verifying it exactly would mean
+  uninstalling a working VS install on this machine first, which wasn't done.
+- Separately: `installer/Rollback.ps1` already correctly distinguished, in its journal, a build tool it had
+  to install (because `Get-ToolStatus` found it missing) from one that was already on the PC - only the
+  former ever gets an `install <winget id>` journal entry at all, so Roll back can never be offered a tool
+  the person already had for something else, by construction, not by a runtime check that could be wrong.
+  It just never acted on that distinction: a tool it installed was always silently left in place, with a
+  passive "remove it yourself in Settings > Apps" note. Roll back now actually asks, by name, whether to
+  uninstall each tool it installed - matching the same pattern already used for the NVIDIA firmware files and
+  the benchmark download (disclose, then ask, never assume) - and does it through winget itself when agreed
+  to, reporting success, a declined choice, or a failed uninstall (with winget's own exit code) distinctly.
+- Verified: `Run-AllTests.ps1`, 1165 of 1165, run elevated (new coverage: the uninstall offer accepted,
+  declined, and failing, plus the existing explanation-text and journal cross-checks extended to match).
+
 ## 2026-10-30 - The benchmark build refused a newer Visual Studio point release CUDA hadn't heard of yet
 
 - Found live: "preparing the benchmark" failed outright with `fatal error C1189: #error: -- unsupported

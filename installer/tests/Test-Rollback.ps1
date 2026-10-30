@@ -30,6 +30,8 @@ $script:LinkArgs = @{}
 function Get-SysShortcutInfo([string]$LinkPath) { [pscustomobject]@{ Target = 'powershell.exe'; Arguments = $script:LinkArgs[$LinkPath] } }
 function Get-SysFastStartup { 0 }
 function Compare-WithBackup([string]$Dir) { [pscustomobject]@{ FastStartup = $true; DisplayOrder = $true } }
+$script:WingetUninstalls = @(); $script:WingetUninstallCode = 0
+function Invoke-SysWinget([string[]]$WingetArgs) { $script:WingetUninstalls += ($WingetArgs -join ' '); $script:WingetUninstallCode }
 
 # A fresh world: temp root, boot partition folder (with the user's own with-esc and previous folders), state, empty journal.
 function New-World([switch]$WithOriginalBootFile) {
@@ -61,7 +63,7 @@ function Stage($W, [string]$Source, [string]$Rel) { Copy-ToBootPartition $W.Stat
 
 # ---------- the explanation text (requirement 14) ----------
 $txt = (Get-RollbackExplanation) -join ' '
-foreach ($k in 'undoes only what this installer changed', 'automatic-resume', 'queued one-time boot', 'only if they are unchanged', 'boot order still has Windows first', 'startup task', 'Fast Startup setting back to what it was', 'working files', 'report and log files', 'NVIDIA firmware files', 'shrunk') {
+foreach ($k in 'undoes only what this installer changed', 'automatic-resume', 'queued one-time boot', 'only if they are unchanged', 'boot order still has Windows first', 'startup task', 'Fast Startup setting back to what it was', 'working files', 'report and log files', 'NVIDIA firmware files', 'shrunk', 'uninstalls any build tool') {
  ExpectTrue "the explanation says: $k" (($txt -replace '\s+', ' ') -like "*$k*")
 }
 
@@ -110,8 +112,8 @@ try {
  ExpectTrue 'dry run changes nothing' (((Get-Content (Join-Path $script:BootDir 'EFI\BOOT\BOOTX64.EFI') -Raw) -eq 'unlock program') -and (Test-ResumeEntry) -and $script:Queued -and (Test-Path (Get-StatePath)) -and (Test-Path (Join-Path (Get-WorkRoot) 'assets')))
  ExpectTrue 'dry run lists what it would do' (@($r.Results | Where-Object Outcome -eq 'WouldDo').Count -ge 5)
 
- # the real thing: delete the firmware files (Y), keep the benchmark (N)
- $r = Run-Rollback $w @('Y', 'Y', 'N')
+ # the real thing: delete the firmware files (Y), keep the benchmark (N), uninstall the build tool (Y)
+ $r = Run-Rollback $w @('Y', 'Y', 'N', 'Y')
  ExpectTrue 'finished' ($r.Finished -and -not $r.Cancelled)
  Expect 'the user''s original BOOTX64.EFI is back, byte for byte (two replacements undone in order)' (Get-SysFileHash (Join-Path $script:BootDir 'EFI\BOOT\BOOTX64.EFI')) $originalHash
  ExpectTrue 'the diagnostic copy is gone' (-not (Test-Path (Join-Path $script:BootDir 'EFI\WindowsGPUUnlock\DIAGNOSTIC.EFI')))
@@ -127,17 +129,38 @@ try {
  ExpectTrue 'benchmark download kept when asked' (Test-Path (Join-Path (Get-WorkRoot) 'benchmark\f.bin'))
  ExpectTrue 'the other working files, including the card image, are deleted' ((-not (Test-Path (Join-Path (Get-WorkRoot) 'capture-1'))) -and (-not (Test-Path (Join-Path (Get-WorkRoot) 'profile'))) -and (-not (Test-Path (Join-Path (Get-WorkRoot) 'discovery'))))
  ExpectTrue 'the generated partition configuration is deleted' (-not (Test-Path $cfg))
- ExpectTrue 'build tools are reported as left installed' ((ResultFor $r '*build tool*').Outcome -eq 'Kept')
+ ExpectTrue 'asked whether to uninstall the build tool it installed, and it was' (((OutText) -like '*installed LLVM*because it was missing*') -and ((ResultFor $r '*build tool*').Outcome -eq 'Removed'))
+ ExpectTrue 'uninstalled through winget, by the exact package id the installer used' ($script:WingetUninstalls[0] -eq 'uninstall --id LLVM.LLVM --exact --source winget --accept-source-agreements')
  ExpectTrue 'reports and backups are kept' ((Test-Path (Join-Path $reportDir 'r.txt')) -and (Test-Path $w.Backup))
  ExpectTrue 'the state file is gone and the journal is archived' ((-not (Test-Path (Get-StatePath))) -and (-not (Test-Path (Get-JournalPath))) -and @(Get-ChildItem (Get-InstallerRoot) -Filter 'journal-rolled-back-*.jsonl').Count -eq 1)
  ExpectTrue 'the closing checklist is printed with the three kinds of outcome' (((OutText) -like '*[removed]*') -and ((OutText) -like '*[LEFT]*') -and ((OutText) -like '*[kept]*'))
  ExpectTrue 'and compares Fast Startup and the boot order with the backup' (((OutText) -like '*Fast Startup is back to the value it had before*') -and ((OutText) -like '*boot order is the same as before*'))
- ExpectTrue 'it asked exactly three questions: roll back, delete firmware files, delete benchmark' ($script:Asked.Count -eq 3)
+ ExpectTrue 'it asked exactly four questions: roll back, delete firmware files, delete benchmark, uninstall the build tool' ($script:Asked.Count -eq 4)
  ExpectTrue 'no restart was needed or offered' ($script:Restarts -eq 0 -and -not $r.NeedsRestart)
 
  # a second run finds nothing to do
  Set-Answers @(); $r2 = Invoke-Rollback
  ExpectTrue 'running Roll back again is harmless' ($r2.Finished -and $r2.Results.Count -eq 0)
+} finally { Remove-TestRoot $w.T }
+
+# ---------- declining to uninstall a build tool, and winget failing to uninstall one ----------
+$w = New-World
+try {
+ Add-JournalEntry -Phase 'tools' -Action 'install Python.Python.3.12' -Target 'Python 3.12' | ForEach-Object { Set-JournalStatus $_ 'done' }
+ Save-InstallerState $w.State
+ $script:WingetUninstalls = @()
+ $r = Run-Rollback $w @('Y', 'N')
+ ExpectTrue 'declining leaves it installed, and winget is never called' (((ResultFor $r '*build tool*').Outcome -eq 'Kept') -and $script:WingetUninstalls.Count -eq 0)
+} finally { Remove-TestRoot $w.T }
+
+$w = New-World
+try {
+ Add-JournalEntry -Phase 'tools' -Action 'install Python.Python.3.12' -Target 'Python 3.12' | ForEach-Object { Set-JournalStatus $_ 'done' }
+ Save-InstallerState $w.State
+ $script:WingetUninstallCode = 1
+ $r = Run-Rollback $w @('Y', 'Y')
+ ExpectTrue 'a failed uninstall is reported, with the code, and Roll back goes on' (((ResultFor $r '*build tool*').Outcome -eq 'Left') -and ((ResultFor $r '*build tool*').Detail -like '*code 1*') -and $r.Finished)
+ $script:WingetUninstallCode = 0
 } finally { Remove-TestRoot $w.T }
 
 # ---------- a file that changed since the installer wrote it is left ----------
