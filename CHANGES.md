@@ -1,5 +1,33 @@
 # Changes
 
+## 2026-10-30 - Diagnostic logging for the automatic-resume RunOnce entry that keeps launching invisibly
+
+- Not a fix - this is instrumentation, added because the actual bug has no evidence yet to fix from. The
+  resume entry the installer offers after a restart (`WindowsGPUUnlockResume`, in `HKCU\...\RunOnce`) has
+  now consumed itself at login, with no window, no console and nothing visible at all, on five or six
+  separate restarts today - every one of them recovered only by manually re-running `Install-GpuUnlock.ps1
+  -Resume` by hand afterward, which has worked every single time. RunOnce has no console attached and
+  nowhere to show a terminating error, so a failure early enough (loading a module, or
+  `Test-DesktopAvailable` itself) would look exactly like "nothing happened at all" - indistinguishable,
+  from the outside, from the dialog silently hanging instead.
+- `Install-GpuUnlock.ps1` now writes one line, unconditionally, before anything else can fail, to
+  `C:\ProgramData\WindowsGPUUnlock\installer\last-launch.log` (PID, session ID, which switches were passed),
+  then another once module loading and the window/console decision succeed, with the loading and
+  `Test-DesktopAvailable` steps each wrapped in their own try/catch that logs the exact exception before
+  re-throwing (behavior on failure is unchanged - still throws - this only adds a record of what happened
+  first). Inside `-Resume` specifically, it also logs right before `Invoke-ResumeStart` is called and right
+  after it returns an answer, and logs inside that path's existing `catch` block too (previously that catch
+  only showed a notice via `Show-Notice`, itself dependent on `$useWindow` - if that was ever the actual
+  problem, the notice could have been just as silent as everything else).
+- Nothing about the registered RunOnce command line changes: `Test-Resume.ps1`'s own assertion that it's
+  exactly `!"<powershell.exe>" -NoProfile -ExecutionPolicy Bypass -File "<ScriptPath>" -Resume`, nothing
+  appended, stays true - the logging lives inside the script RunOnce already launches, not in how it's
+  launched.
+- Verified: `Run-AllTests.ps1`, 1153 of 1153, run elevated.
+- Still open: next time this happens, `last-launch.log` should finally say whether it never started,
+  crashed loading a module, failed `Test-DesktopAvailable`, or actually reached and hung inside the resume
+  dialog - at which point there'll be something real to fix instead of a fifth guess.
+
 ## 2026-10-30 - Dropped the Start menu shortcut option; the desktop shortcut is now the only one
 
 - On the reference machine, even after the 10-28 fix made a failed shortcut non-fatal, the underlying refusal

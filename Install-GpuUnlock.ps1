@@ -6,10 +6,37 @@
 param([switch]$Elevated, [switch]$DryRun, [string]$CaptureFolder, [switch]$Resume, [switch]$Rollback, [switch]$Confirmed, [switch]$Console)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSCommandPath
-. (Join-Path $here 'internal-boot\SecureFolder.ps1')
-foreach ($m in 'Ui', 'State', 'Checks', 'CardSelect', 'Tools', 'BootPartition', 'Backup', 'Plan', 'BootEntry', 'Capture', 'Firmware', 'BuildTest', 'Benchmark', 'Unlock', 'Schedule', 'Resume', 'Rollback', 'Extras', 'Status', 'Main', 'Session', 'Gui') { . (Join-Path $here "installer\$m.ps1") }
 
-$useWindow = (-not $Console) -and (Test-DesktopAvailable)
+# Found live, 2026-10-30: the automatic-resume RunOnce entry (-Resume) repeatedly consumed itself at login
+# with nothing ever visibly appearing - no window, no console, no trace of any kind - while the exact same
+# command line, run manually, worked every time. RunOnce has no console attached and nowhere to show a
+# terminating error, so a failure this early (loading a module, or Test-DesktopAvailable itself) would look
+# exactly like "nothing happened" and leave no evidence to tell that apart from the resume dialog silently
+# hanging. This writes one line unconditionally before anything else can fail, and another once loading and
+# the window/console decision succeed, so the next time this happens at login the log says which it was.
+$traceLog = Join-Path $env:ProgramData 'WindowsGPUUnlock\installer\last-launch.log'
+try {
+ $traceDir = Split-Path -Parent $traceLog
+ if (-not (Test-Path -LiteralPath $traceDir)) { [void](New-Item -ItemType Directory -Path $traceDir -Force) }
+ ('[{0}] PID={1} SessionId={2} starting: Resume={3} Elevated={4} Console={5}' -f (Get-Date -Format 'o'), $PID, (Get-Process -Id $PID).SessionId, [bool]$Resume, [bool]$Elevated, [bool]$Console) |
+  Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
+} catch { }
+
+try {
+ . (Join-Path $here 'internal-boot\SecureFolder.ps1')
+ foreach ($m in 'Ui', 'State', 'Checks', 'CardSelect', 'Tools', 'BootPartition', 'Backup', 'Plan', 'BootEntry', 'Capture', 'Firmware', 'BuildTest', 'Benchmark', 'Unlock', 'Schedule', 'Resume', 'Rollback', 'Extras', 'Status', 'Main', 'Session', 'Gui') { . (Join-Path $here "installer\$m.ps1") }
+} catch {
+ ('[{0}] PID={1} FAILED loading a module: {2}' -f (Get-Date -Format 'o'), $PID, $_.Exception.Message) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
+ throw
+}
+
+try {
+ $useWindow = (-not $Console) -and (Test-DesktopAvailable)
+ ('[{0}] PID={1} modules loaded; useWindow={2}' -f (Get-Date -Format 'o'), $PID, $useWindow) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
+} catch {
+ ('[{0}] PID={1} FAILED Test-DesktopAvailable: {2}' -f (Get-Date -Format 'o'), $PID, $_.Exception.Message) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
+ throw
+}
 
 # Opens this script again as administrator (Windows shows its own approval prompt). Returns $false if that was declined or failed.
 function Restart-AsAdministrator([string[]]$ExtraArguments) {
@@ -37,7 +64,9 @@ if ($Resume) {
  try {
   Set-RepoRoot $here
   if (-not (Get-SysIsAdmin)) { Set-ReadOnlyMode $true }     # only the step number is read here; the elevated run checks the data folder
+  ('[{0}] PID={1} about to show the resume dialog (Invoke-ResumeStart)' -f (Get-Date -Format 'o'), $PID) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
   $choice = Invoke-ResumeStart
+  ('[{0}] PID={1} resume dialog answered: {2}' -f (Get-Date -Format 'o'), $PID, $choice) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
   Set-ReadOnlyMode $false
   if ($choice -eq 'Stop') { Wait-CloseOutside; return }
   if (-not (Get-SysIsAdmin)) {
@@ -48,6 +77,7 @@ if ($Resume) {
   $Confirmed = $true
   if ($choice -eq 'Rollback') { $Rollback = $true }
  } catch {
+  ('[{0}] PID={1} FAILED in the resume block: {2}' -f (Get-Date -Format 'o'), $PID, $_.Exception.Message) | Out-File -FilePath $traceLog -Append -Encoding utf8 -ErrorAction SilentlyContinue
   try { Remove-ResumeEntry } catch { }
   Show-Notice ('The installer could not resume: ' + $_.Exception.Message)
   Wait-CloseOutside; return
