@@ -1,5 +1,22 @@
 # Changes
 
+## 2026-10-30 - The benchmark build refused a newer Visual Studio point release CUDA hadn't heard of yet
+
+- Found live: "preparing the benchmark" failed outright with `fatal error C1189: #error: -- unsupported
+  Microsoft Visual Studio version! Only the versions between 2017 and 2022 (inclusive) are supported!`.
+  Checked directly rather than guessing: the active compiler is genuinely `cl.exe` 19.44.35229 from the same
+  VS2022 BuildTools install this project already uses everywhere else - not a wrong Visual Studio edition
+  being picked up, just a later VS2022 point release than CUDA 12.6's `host_config.h` had a hard-coded
+  version number for when it shipped. nvcc's own error text names the fix: `-allow-unsupported-compiler`,
+  which lifts only that specific version-range check and nothing else nvcc or cl.exe would otherwise enforce.
+- Added that flag to the one nvcc invocation in `benchmark/build.ps1`. Verified by actually rebuilding against
+  this machine's real downloaded CUDA packages (not a mock): compiled, linked, and the build's own
+  metadata-only version check confirmed `cuda_runtime: 12060, cublas: 12.6.0` - the exact versions expected.
+  No test file exercises this script's nvcc command line directly (`Test-Benchmark.ps1` mocks the whole build
+  step), so this had no automated coverage to update - it was only ever going to be caught by actually
+  building, which is what running the real installer, on a real machine, today did.
+- Verified: `Run-AllTests.ps1`, 1161 of 1161, run elevated.
+
 ## 2026-10-30 - The diagnostic log itself couldn't write; found why the resume keeps failing, and mitigated it
 
 - The scheduled-task migration got its first real test on an actual login a few minutes after being set up:

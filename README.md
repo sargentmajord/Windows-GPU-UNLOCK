@@ -71,6 +71,11 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - Fixed the benchmark build failing on a newer Visual Studio update
+
+If Windows had updated Visual Studio 2022 past a certain point release, the optional benchmark step could
+fail to build outright, even though the installed compiler is still genuinely VS2022. Fixed.
+
 ### 2026-10-30 - The automatic-resume-after-restart step is more reliable
 
 The window that's supposed to appear after a restart, asking whether to continue, used to occasionally
