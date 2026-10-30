@@ -145,6 +145,42 @@ try {
  Expect 'dry run: no journal' @(Read-Journal).Count $before
 } finally { Remove-TestRoot $t }
 
+# ---------- end-of-run cleanup offer ----------
+$t2 = New-TestRoot
+try {
+ # nothing this run installed (the pre-existing-tool case: it never got an 'install *' journal entry at all,
+ # so there is nothing here to offer) -> zero questions, zero winget calls
+ $script:WingetCalls.Clear()
+ Set-Answers @()
+ Invoke-ToolCleanupOffer
+ Expect 'no journal entries: no question asked' $script:Asked.Count 0
+ Expect 'no journal entries: no winget call' $script:WingetCalls.Count 0
+ Expect 'no journal entries: nothing printed' (OutText) ''
+
+ # this run installed python -> it is the only one offered, and accepting it uninstalls with the exact id
+ $script:State = @{ python = $false; msvc = $true; llvm = $true }
+ function Invoke-SysWinget([string[]]$WingetArgs) { [void]$script:WingetCalls.Add($WingetArgs -join ' '); $script:State['python'] = $true; 0 }
+ Set-Answers @('Y')
+ ExpectTrue 'tool install succeeds' (Resolve-Tools)
+ $script:WingetCalls.Clear()
+
+ Set-Answers @('Y')
+ function Invoke-SysWinget([string[]]$WingetArgs) { [void]$script:WingetCalls.Add($WingetArgs -join ' '); 0 }
+ Invoke-ToolCleanupOffer
+ Expect 'exactly one tool is offered' $script:Asked.Count 1
+ ExpectTrue 'the offer names the installed tool' ($script:Asked[0] -like '*python*')
+ Expect 'one uninstall call' $script:WingetCalls.Count 1
+ ExpectTrue 'uninstall is exact-id, from the winget source' ($script:WingetCalls[0] -eq 'uninstall --id Pkg.python --exact --source winget --accept-source-agreements')
+ ExpectTrue 'says it was uninstalled' ((OutText) -like '*was uninstalled*')
+
+ # declining leaves it installed and never calls winget
+ $script:WingetCalls.Clear()
+ Set-Answers @('N')
+ Invoke-ToolCleanupOffer
+ Expect 'declined: no winget call' $script:WingetCalls.Count 0
+ ExpectTrue 'says it was left installed' ((OutText) -like '*was left installed*')
+} finally { Remove-TestRoot $t2 }
+
 # ---------- build environment ----------
 $tools = @(
  [pscustomobject]@{ Id = 'llvm'; Info = [pscustomobject]@{ Path = 'C:\LLVM\bin\clang.exe'; Dir = 'C:\LLVM\bin'; Lld = 'C:\LLVM\bin\lld-link.exe' } },

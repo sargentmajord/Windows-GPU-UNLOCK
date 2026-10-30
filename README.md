@@ -71,6 +71,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - The keep-or-remove question for build tools is now asked right when install finishes
+
+Previously that question only came up if you ran Roll back afterward - most people who finish a normal,
+successful install never do. Now, right after a successful install, it asks once about any build tool it
+had to install for you, same as Roll back already did. Either way, it never touches a tool you already had
+installed before running this - that was already guaranteed by how the installer tracks what it changes,
+not just a check that could be wrong, and there's now a dedicated test proving it directly.
+
 ### 2026-10-30 - A smaller Visual Studio download, and Roll back now offers to remove it afterward
 
 If you don't already have the C++ build tools the (optional) benchmark needs, the installer's automatic

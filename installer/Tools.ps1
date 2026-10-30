@@ -119,6 +119,27 @@ function Resolve-Tools([switch]$DryRun) {
  $true
 }
 
+# Offers to uninstall, one at a time, each build tool THIS install actually installed (never one that was
+# already there - only a tool Get-ToolStatus found missing, and Resolve-Tools then installed, ever gets an
+# 'install *' journal entry to offer here at all). Asked once, right when a run finishes successfully, so
+# it is not missed by whoever never runs Roll back. Roll back still offers the same thing as a safety net.
+function Invoke-ToolCleanupOffer {
+ $installed = @(Read-Journal | Where-Object { $_.Action -like 'install *' -and $_.Status -eq 'done' })
+ if (-not $installed.Count) { return }
+ Write-Plain ''
+ Write-Plain 'This install downloaded and installed the following build tools because they were missing:'
+ foreach ($e in $installed) { Write-Plain ('  - ' + $e.Target) }
+ Write-Plain 'If you do not already use them for anything else, they can be removed now; otherwise they are left as they are.'
+ foreach ($e in $installed) {
+  $wingetId = $e.Action -replace '^install ', ''
+  if (Ask-YesNo ('Uninstall {0} now?' -f $e.Target)) {
+   $code = Invoke-SysWinget @('uninstall', '--id', $wingetId, '--exact', '--source', 'winget', '--accept-source-agreements')
+   if ($code -eq 0) { Write-Plain ('  ' + $e.Target + ' was uninstalled.') }
+   else { Write-Plain ('  Uninstalling ' + $e.Target + ' failed (code ' + $code + '); remove it yourself in Settings > Apps if you still want it gone.') }
+  } else { Write-Plain ('  ' + $e.Target + ' was left installed.') }
+ }
+}
+
 # The settings every build and host test needs: tool folders on PATH, the profile folder on CPATH.
 function Get-BuildEnvironment($Tools, [string]$ProfileDir) {
  $clang = ($Tools | Where-Object Id -eq 'llvm').Info; $vc = ($Tools | Where-Object Id -eq 'msvc').Info

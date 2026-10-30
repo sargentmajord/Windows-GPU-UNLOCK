@@ -423,6 +423,7 @@ function Invoke-Installer {
  if ($CaptureFolder -and -not $DryRun) { throw '-CaptureFolder is only for a dry run; a real run always makes a fresh capture.' }
  $state = Read-InstallerState
  $phase = if ($Rollback) { 'rollback' } elseif ($state.Phase -eq 'new') { $script:PhaseOrder[0] } else { $state.Phase }
+ $startedAtDone = ($phase -eq 'done')   # already finished before this run started: do not re-offer tool cleanup on every later status check
  if ($DryRun) { Write-Plain 'DRY RUN: nothing will be changed and nothing is saved.' }
  $script:RestartStarted = $false
  # A resume entry that is still there when a run starts is a leftover (the resumed run removes its own entry first): report and remove it.
@@ -457,6 +458,7 @@ function Invoke-Installer {
   $state.Phase = $phase
   if (-not $DryRun) { Save-InstallerState $state }
  }
+ if (-not $DryRun -and -not $startedAtDone) { Invoke-ToolCleanupOffer }
  [pscustomobject]@{ Done = $true; Reason = ''; Phase = 'done' }
  } finally {
   # no restart was started in this run: nothing may relaunch the installer at the next login

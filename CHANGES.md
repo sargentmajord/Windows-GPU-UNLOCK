@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-10-30 - The build-tool uninstall offer moved from Roll back into the normal end-of-install flow
+
+- Raised directly: burying the keep-or-uninstall question inside Roll back only reaches the person who runs
+  Roll back - most people who finish a successful install never do. It needs to be asked once, right when
+  the install actually finishes, not left for a path most people never take.
+- Added `Invoke-ToolCleanupOffer` (`installer/Tools.ps1`), called once at the natural end of a successful,
+  non-dry-run install (`installer/Main.ps1`, guarded so a later status check on an already-finished install
+  never re-asks). It lists, by name, only the build tools *this run* installed, and asks about each one in
+  turn; declining leaves it in place, accepting runs the same exact-id winget uninstall Roll back's version
+  uses. Roll back keeps its own copy of the same offer as a safety net for anyone who does run it later.
+- The guarantee the person asked for directly - that an enthusiast's own pre-existing toolchain is never
+  touched against their wishes - was already structural, not a runtime check that could be wrong: a tool
+  only ever gets an `install <winget id>` journal entry when `Get-ToolStatus` found it missing in the first
+  place (`Resolve-Tools`'s own `$missing` filter), so a tool that was already there has nothing in the
+  journal for either offer to act on. Added a dedicated test proving this directly - an empty journal (the
+  pre-existing-tool case) asks zero questions and calls winget zero times - rather than leaving it as an
+  inference from the install-offer tests alone.
+- Verified: `Run-AllTests.ps1`, 1176 of 1176, run elevated (new coverage: the end-of-run offer with nothing
+  installed, with one tool installed and accepted, and with one tool installed and declined).
+
 ## 2026-10-30 - Slimmed the VS Build Tools install, and Roll back now offers to uninstall what it installed
 
 - Asked directly: a random person with nothing installed is being offered a 3-7 GB Visual Studio download
