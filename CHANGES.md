@@ -30,8 +30,11 @@
   coming up first. This changes nothing about what runs or how it's elevated, only when it's allowed to start.
 - Verified: `Run-AllTests.ps1`, 1161 of 1161, run elevated (the new trigger-delay property included in
   `Test-Resume.ps1`'s real-system verification block).
-- Still open: whether the 20-second delay actually prevents the crash is unconfirmed until the next real
-  login exercises it - but `last-launch.log` can now actually answer that, which it couldn't before this fix.
+- Confirmed live, same day, on a genuinely fresh install's first restart, with no manual intervention of any
+  kind: the trigger fired on its own, `last-launch.log` captured every step (module load, dialog shown,
+  "Continue" clicked, elevated relaunch), and Task Scheduler's own log records "successfully completed ...
+  return code 0" - the same task that had failed with an unhandled-error code the first time, before either
+  fix. The fully automatic resume - the thing that had never once worked unattended before today - worked.
 
 ## 2026-10-30 - Replaced the automatic-resume RunOnce entry with a scheduled task
 
