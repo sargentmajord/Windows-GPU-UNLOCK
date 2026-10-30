@@ -59,8 +59,9 @@ To rehearse, run `Install-GpuUnlock.cmd -DryRun`: it asks the same questions, pr
 13. **The result.** After the restart the installer reads the program's report, measures the card again and prints a plain verdict: a clear improvement (+20% or more), a small one (+5% to +20%),
     or no meaningful improvement, in which case it recommends rolling back. Only matrix-heavy GPU work speeds up (AI prefill, training, image generation). Games, FP32 work and memory-bound work do not.
     The unlocked card draws more power and runs hotter; the report records power and temperature.
-14. **Unlocking again later.** The unlock lasts until the PC is powered off or goes to sleep. The installer offers a Start-menu shortcut **"Unlock my GPU on next boot"** (and, as an extra choice, a copy on the
-    desktop; a desktop shortcut can be edited by any program running as you, so the Start-menu one is the safer one). Use it after each power-off: it asks Windows for administrator approval, queues one unlock and offers the restart.
+14. **Unlocking again later.** The unlock lasts until the PC is powered off or goes to sleep. The installer offers a desktop shortcut **"Unlock my GPU on next boot"** (any program running as you could in principle
+    edit a desktop shortcut, which is why an earlier version offered a Start-menu location instead; dropped, since that folder's own permissions are outside this project's control and a routine Windows update was enough to
+    make it fail unpredictably). Use it after each power-off: it asks Windows for administrator approval, queues one unlock and offers the restart.
 15. **Two optional extras** (see below), offered last.
 
 ## Restarts

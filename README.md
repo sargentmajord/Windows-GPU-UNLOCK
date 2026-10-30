@@ -71,6 +71,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - The "unlock again" shortcut is now desktop-only
+
+The Start Menu option is gone. Even with the 10-28 fix, the underlying refusal kept coming back on the
+reference machine - that folder's permissions aren't this project's to control, and something as ordinary
+as a Windows feature update was enough to reset them into a state the installer correctly refuses. The
+desktop shortcut (the same already-accepted tradeoff it always had) is now the only option offered.
+
 ### 2026-10-28 - A failed Start menu shortcut no longer stops the whole install
 
 If creating the optional Start menu shortcut fails (an admin/permissions problem specific to one PC), the

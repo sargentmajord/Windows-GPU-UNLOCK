@@ -203,9 +203,8 @@ function Invoke-Phase-extra1-collect($State, $Opt) {
 function Invoke-Phase-extra1-shortcut($State, $Opt) {
  $links = if ($State.Contains('Shortcut') -and $State.Shortcut) { @($State.Shortcut.Links) } else { @() }
  if ($links.Count -or $Opt.DryRun) {
-  $withDesktop = ($links.Count -gt 1)
   try {
-   $r = New-UnlockShortcut $State 'automatic' -Desktop:$withDesktop -DryRun:$Opt.DryRun
+   $r = New-UnlockShortcut $State 'automatic' -DryRun:$Opt.DryRun
    if (-not $Opt.DryRun) { $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = 'automatic' }; Write-Plain 'The shortcut "Unlock my GPU on next boot" now says that no key is needed.' }
   } catch { Write-Plain ('The shortcut could not be updated: ' + $_.Exception.Message) }
  }
@@ -350,8 +349,7 @@ function Disable-Extras($State, [switch]$DryRun) {
   else { [void](Disable-EveryBoot); $State.Schedule = [ordered]@{ Mode = 'Off'; Set = (Get-Date).ToString('o') }; Write-Plain 'The startup task was removed and Fast Startup put back to its saved value.' }
  }
  if ($State.Contains('Shortcut') -and $State.Shortcut) {
-  $withDesktop = (@($State.Shortcut.Links).Count -gt 1)
-  $r = New-UnlockShortcut $State 'manual' -Desktop:$withDesktop -DryRun:$DryRun
+  $r = New-UnlockShortcut $State 'manual' -DryRun:$DryRun
   if (-not $DryRun) { $State.Shortcut = [ordered]@{ Script = $r.Script; Links = @($r.Links); Mode = 'manual' } }
  }
  if (-not $DryRun) { $State.Automatic = [ordered]@{ Active = $false; SwitchedOff = (Get-Date).ToString('o') } }

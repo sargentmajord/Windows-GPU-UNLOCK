@@ -10,7 +10,6 @@ $script:ShortcutName = 'Unlock my GPU on next boot'
 
 # --- system calls (replaceable in tests) ---
 function Get-SysDesktopPath { [Environment]::GetFolderPath('Desktop') }
-function Get-SysStartMenuPath { [Environment]::GetFolderPath('CommonPrograms') }   # C:\ProgramData\Microsoft\Windows\Start Menu\Programs, changeable only by administrators
 function Get-SysDataRoot { Join-Path $env:ProgramData 'WindowsGPUUnlock' }
 function Invoke-SysScheduleScript([string]$CommandText) {
  $ErrorActionPreference = 'Continue'
@@ -81,16 +80,18 @@ Say ''
 "@
 }
 
-# Writes the script into the protected data folder and the shortcut into the all-users Start menu (only administrators can change that
-# folder). A copy on the desktop is optional: any program running as the user can edit a desktop shortcut and so change what an
-# approved click runs as administrator. Every file is written journaled, and checked afterwards.
-function New-UnlockShortcut($State, [ValidateSet('manual', 'automatic')][string]$Mode = 'manual', [switch]$Desktop, [switch]$DryRun) {
+# Writes the script into the protected data folder and the shortcut onto the desktop. (An earlier version also offered a copy in the
+# all-users Start menu; dropped 2026-10-30 - that folder's own permissions are outside this project's control and can be reset by
+# something as ordinary as a Windows feature update, which made the shortcut step fail unpredictably on machines nobody here could
+# reproduce ahead of time. The desktop shortcut's own, different and already-accepted tradeoff - any program running as the user can
+# edit it, and so change what an approved click runs as administrator - stands as before.) Every file is written journaled, and
+# checked afterwards.
+function New-UnlockShortcut($State, [ValidateSet('manual', 'automatic')][string]$Mode = 'manual', [switch]$DryRun) {
  $dataRoot = Get-SysDataRoot
  $scriptPath = Join-Path $dataRoot 'Unlock-Next-Boot.ps1'
  $name = $script:ShortcutName + '.lnk'
- $links = @(Join-Path (Get-SysStartMenuPath) $name)
- if ($Desktop) { $links += Join-Path (Get-SysDesktopPath) $name }
- if ($DryRun) { Write-Plain "DRYRUN: create the script $scriptPath and the shortcut '$($script:ShortcutName)' in the Start menu$(if ($Desktop) { ' and on the desktop' })"; return [pscustomobject]@{ Script = $scriptPath; Links = $links } }
+ $link = Join-Path (Get-SysDesktopPath) $name
+ if ($DryRun) { Write-Plain "DRYRUN: create the script $scriptPath and the shortcut '$($script:ShortcutName)' on the desktop"; return [pscustomobject]@{ Script = $scriptPath; Links = @($link) } }
  $text = Get-ShortcutScriptText $Mode
  $e = $null
  [void][System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$e)
@@ -99,26 +100,10 @@ function New-UnlockShortcut($State, [ValidateSet('manual', 'automatic')][string]
  [void](Invoke-JournaledChange -Phase 'schedule' -Action 'write the next-boot unlock script' -Target $scriptPath -Previous ([ordered]@{ Existed = (Test-Path -LiteralPath $scriptPath) }) -Undo 'delete it' -Do {
   Write-SecureFile $scriptPath $text ([Text.UTF8Encoding]::new($true))
  })
- foreach ($link in $links) {
-  $isStart = ($link -eq $links[0])
-  [void](Invoke-JournaledChange -Phase 'schedule' -Action $(if ($isStart) { 'create the Start menu shortcut' } else { 'create the desktop shortcut' }) -Target $link -Previous ([ordered]@{ Existed = (Test-Path -LiteralPath $link) }) -Undo 'delete it if it is still the shortcut the installer made' -Do {
-   Invoke-SysCreateShortcut $link $psExe ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $scriptPath) 'Queue one GPU unlock for the next start (asks for administrator approval)'
-   if ($isStart) {
-    # A freshly created shortcut inherits the elevated creator's own account on its ACL, same as any new
-    # file (Write-SecureFile's comment above notes the same thing for the data folder) - setting only the
-    # owner, as before, does not clear that. Found 2026-10-28 on the reference machine: the installer's own
-    # (real administrator) creator account was still on the shortcut's ACL afterward, so this correctly-
-    # strict check refused it. Reset and re-grant explicitly, the same proven pattern Protect-DataFolder
-    # uses, so the shortcut's own permissions never depend on who happened to be logged in when it was made.
-    Invoke-SysIcacls @($link, '/setowner', '*S-1-5-32-544', '/Q')
-    Invoke-SysIcacls @($link, '/reset', '/Q')
-    Invoke-SysIcacls @($link, '/inheritance:r', '/grant:r', '*S-1-5-18:F', '*S-1-5-32-544:F', '*S-1-5-32-545:RX', '/Q')
-    $p = @(Get-SecurityProblems $link) + @(Get-SecurityProblems (Split-Path -Parent $link))
-    if ($p.Count) { Remove-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue; throw ('The Start menu shortcut can be changed by ordinary users, so it was removed: ' + ($p -join '; ')) }
-   }
-  })
- }
- [pscustomobject]@{ Script = $scriptPath; Links = $links }
+ [void](Invoke-JournaledChange -Phase 'schedule' -Action 'create the desktop shortcut' -Target $link -Previous ([ordered]@{ Existed = (Test-Path -LiteralPath $link) }) -Undo 'delete it if it is still the shortcut the installer made' -Do {
+  Invoke-SysCreateShortcut $link $psExe ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $scriptPath) 'Queue one GPU unlock for the next start (asks for administrator approval)'
+ })
+ [pscustomobject]@{ Script = $scriptPath; Links = @($link) }
 }
 
 # --- every boot (needs automatic mode) ---

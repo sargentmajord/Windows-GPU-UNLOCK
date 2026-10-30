@@ -37,7 +37,7 @@ function Convert-CaptureToReport($Tools, $Dir) { }
 function Get-HostTestPlan($State, $Tools, $AssetsDir) { @([pscustomobject]@{ Name = 'automatic mode'; File = 'C:\x\test-automatic.ps1'; Params = [ordered]@{ A = 1 } }, [pscustomobject]@{ Name = 'manual mode'; File = 'C:\x\test-automatic.ps1'; Params = [ordered]@{ B = 1 } }, [pscustomobject]@{ Name = 'other'; File = 'C:\x\o.ps1'; Params = [ordered]@{} }) }
 function Get-NoEscBuiltFileList { $script:NoEscFiles }
 $script:Shortcuts = @(); $script:EveryBootOn = 0; $script:EveryBootOff = 0
-function New-UnlockShortcut($State, [string]$Mode = 'manual', [switch]$Desktop, [switch]$DryRun) { if (-not $DryRun) { $script:Shortcuts += "$Mode|$([bool]$Desktop)" }; [pscustomobject]@{ Script = 'S'; Links = @($(if ($Desktop) { 'a', 'b' } else { 'a' })) } }
+function New-UnlockShortcut($State, [string]$Mode = 'manual', [switch]$DryRun) { if (-not $DryRun) { $script:Shortcuts += "$Mode" }; [pscustomobject]@{ Script = 'S'; Links = @('a') } }
 function Enable-EveryBoot($State, [switch]$DryRun) { $script:EveryBootOn++; $State.Schedule = [ordered]@{ Mode = 'EveryBoot' } }
 function Disable-EveryBoot([switch]$DryRun) { $script:EveryBootOff++; 'Off' }
 $script:Records = New-Object System.Collections.Queue
@@ -190,12 +190,12 @@ try {
  $script:Shortcuts = @()
  Set-Answers @('N')
  $r = Invoke-Phase-extra1-shortcut $s (Opt)
- ExpectTrue 'the shortcut is made again for automatic mode, every start declined' (($script:Shortcuts[0] -eq 'automatic|False') -and $script:EveryBootOn -eq 0 -and $r.Next -eq 'extra2-offer' -and $s.Shortcut.Mode -eq 'automatic')
+ ExpectTrue 'the shortcut is made again for automatic mode, every start declined' (($script:Shortcuts[0] -eq 'automatic') -and $script:EveryBootOn -eq 0 -and $r.Next -eq 'extra2-offer' -and $s.Shortcut.Mode -eq 'automatic')
  ExpectTrue 'every start was offered with its warning' (((OutText) -like '*Unlock at every start*') -and $script:Asked[0] -like 'Unlock at every start?*')
- $s.Shortcut.Links = @('a', 'b'); $script:Shortcuts = @()
+ $s.Shortcut.Links = @('a'); $script:Shortcuts = @()
  Set-Answers @('Y')
  $r = Invoke-Phase-extra1-shortcut $s (Opt)
- ExpectTrue 'a desktop copy that existed is kept; Y sets up every start' (($script:Shortcuts[0] -eq 'automatic|True') -and $script:EveryBootOn -eq 1)
+ ExpectTrue 'a shortcut that existed is remade; Y sets up every start' (($script:Shortcuts[0] -eq 'automatic') -and $script:EveryBootOn -eq 1)
  Set-Answers @()
  $r = Invoke-Phase-extra1-shortcut $s (Opt)
  ExpectTrue 'once every start is on, it is not asked again' ($r.Next -eq 'extra2-offer' -and $script:EveryBootOn -eq 1)
@@ -301,7 +301,7 @@ try {
  Disable-Extras $s
  ExpectTrue 'the manual wrapper is the firmware entry''s file again' ((BootHash 'EFI\BOOT\BOOTX64.EFI') -eq $manualHash)
  ExpectTrue 'the startup task is removed' ($script:EveryBootOff -eq 1 -and $s.Schedule.Mode -eq 'Off')
- ExpectTrue 'the shortcut says manual again' (($script:Shortcuts[0] -eq 'manual|False') -and $s.Shortcut.Mode -eq 'manual')
+ ExpectTrue 'the shortcut says manual again' (($script:Shortcuts[0] -eq 'manual') -and $s.Shortcut.Mode -eq 'manual')
  ExpectTrue 'automatic mode is off in the state' ($s.Automatic.Active -eq $false)
  ExpectTrue 'the automatic programs stay on the partition (nothing was deleted)' (Test-Path (Join-Path $script:BootDir 'EFI\WindowsGPUUnlock\UNLOCK-AUTO.EFI'))
  # the start menu offers it only while the extras are on

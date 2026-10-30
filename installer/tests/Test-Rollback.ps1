@@ -343,7 +343,10 @@ finally { Remove-TestRoot $w.T }
 # ---------- the strings Roll back looks for are the ones the modules write ----------
 $sched = Get-Content (Join-Path $base 'Schedule.ps1') -Raw; $cap = Get-Content (Join-Path $base 'Capture.ps1') -Raw; $bp = Get-Content (Join-Path $base 'BootPartition.ps1') -Raw
 $be = Get-Content (Join-Path $base 'BootEntry.ps1') -Raw; $bt = Get-Content (Join-Path $base 'BuildTest.ps1') -Raw; $rb = Get-Content (Join-Path $base 'Rollback.ps1') -Raw
-foreach ($a in 'write the next-boot unlock script', 'create the Start menu shortcut', 'create the desktop shortcut', 'unlock at every start (startup task, Fast Startup off)') { ExpectTrue "Schedule.ps1 journals '$a'" ($sched.Contains($a) -and $rb.Contains($a)) }
+foreach ($a in 'write the next-boot unlock script', 'create the desktop shortcut', 'unlock at every start (startup task, Fast Startup off)') { ExpectTrue "Schedule.ps1 journals '$a'" ($sched.Contains($a) -and $rb.Contains($a)) }
+# 'create the Start menu shortcut' is deliberately not asserted here any more (Schedule.ps1 no longer writes it, since
+# 2026-10-30) - Rollback.ps1 still recognizes it, on purpose, so an old install's journal still rolls back cleanly;
+# see the fixture above, which exercises exactly that with a plain, unconsistency-checked journal entry.
 foreach ($a in 'copy file to boot partition', 'create folder on boot partition') { ExpectTrue "Capture.ps1 journals '$a'" ($cap.Contains($a) -and $rb.Contains($a)) }
 foreach ($a in 'shrink C:', 'created partition identity') { ExpectTrue "BootPartition.ps1 journals '$a'" ($bp.Contains($a) -and $rb.Contains($a)) }
 ExpectTrue 'BootEntry.ps1 journals the queued boot' ($be.Contains('queue one-time boot') -and $rb.Contains('queue one-time boot'))

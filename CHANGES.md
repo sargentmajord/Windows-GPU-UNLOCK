@@ -1,5 +1,33 @@
 # Changes
 
+## 2026-10-30 - Dropped the Start menu shortcut option; the desktop shortcut is now the only one
+
+- On the reference machine, even after the 10-28 fix made a failed shortcut non-fatal, the underlying refusal
+  kept recurring: the Start Menu folder's own permissions (outside this project's control, shared with every
+  other app on the machine) got reset back to a state the installer correctly refuses - most plausibly by a
+  routine Windows feature update applying its own default ACL template during a large build upgrade. That
+  isn't a bug in the installer's check (a personal account SID on that folder genuinely is the tampering risk
+  the check exists to catch); it's that the folder isn't this project's to keep fixed every time something
+  else resets it. Decided not to chase that any further: the desktop shortcut nobody turns out to need the
+  Start Menu one for.
+- `New-UnlockShortcut` (`installer/Schedule.ps1`) no longer takes a `-Desktop` switch or builds a two-location
+  `$links` array - it always makes exactly one shortcut, on the desktop, and the icacls-hardening block that
+  only ever applied to the Start Menu location (`/setowner`, `/reset`, `/inheritance:r` on the link itself) is
+  gone with it, along with `Get-SysStartMenuPath`.
+- `installer/Main.ps1`'s `schedule` phase now asks one question ("Create the shortcut ... on the desktop?")
+  instead of two ("... in the Start menu?" then "Also put a copy on the desktop?"), and shows the
+  edit-by-any-program-running-as-you warning up front, since it now applies to the only option offered.
+  `installer/Extras.ps1`'s `extra1-shortcut` (rewords the shortcut for automatic mode) and `Revert-ToManual`
+  (rewords it back) both drop the now-nonexistent `-Desktop:$withDesktop` argument - the second of those was a
+  real latent bug already: it would have thrown a parameter-binding error the first time anyone actually hit
+  that code path, since nothing had called it with the old two-shortcut shape in a long time.
+- `installer/Rollback.ps1` is deliberately left untouched: it still recognizes a journaled
+  `'create the Start menu shortcut'` entry from an install made before this change, so rolling one of those
+  back still works. `installer/tests/Test-Rollback.ps1` keeps a fixture proving exactly that, now explicitly
+  uncoupled from the cross-file consistency check (which does need Schedule.ps1 to still contain every string
+  Rollback.ps1 looks for in a *current* install).
+- Verified: `Run-AllTests.ps1`, 1152 of 1152, run elevated.
+
 ## 2026-10-28 - A failed Start menu shortcut used to stop the whole install, with no visible way out
 
 - Found live: on a machine where the shortcut fails (an admin/ACL problem on that one PC, same as the one

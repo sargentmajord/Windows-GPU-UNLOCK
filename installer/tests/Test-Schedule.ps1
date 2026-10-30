@@ -25,18 +25,17 @@ ExpectThrows 'an unknown mode is refused' { Get-ShortcutScriptText 'turbo' } '*t
 # ---------------- creating the shortcut (real COM, temporary folders) ----------------
 $t = New-TestRoot
 try {
- $desk = Join-Path $t 'desktop'; $data = Join-Path $t 'data'; $start = Join-Path $t 'startmenu'; [void](New-Item -ItemType Directory $desk)
+ $desk = Join-Path $t 'desktop'; $data = Join-Path $t 'data'; [void](New-Item -ItemType Directory $desk)
  function Get-SysDesktopPath { $desk }
  function Get-SysDataRoot { $data }
- function Get-SysStartMenuPath { $start }
  $isAdmin0 = Get-SysIsAdmin
- if ($isAdmin0) { Protect-DataFolder $data; Protect-DataFolder $start }     # the real thing: a protected data folder and Start menu folder
- else { Write-Host 'skip shortcut and script-protection tests (needs an administrator session)'; [void](New-Item -ItemType Directory $data, $start) }
+ if ($isAdmin0) { Protect-DataFolder $data }     # the real thing: a protected data folder
+ else { Write-Host 'skip shortcut and script-protection tests (needs an administrator session)'; [void](New-Item -ItemType Directory $data) }
  if ($isAdmin0) {
  $r = New-UnlockShortcut @{} 'manual'
  ExpectTrue 'script written' (Test-Path $r.Script)
- Expect 'one shortcut by default, in the Start menu' $r.Links.Count 1
- ExpectTrue 'it is in the all-users Start menu folder' ($r.Links[0] -like "$start*")
+ Expect 'one shortcut, on the desktop' $r.Links.Count 1
+ ExpectTrue 'it is on the desktop' ($r.Links[0] -like "$desk*")
  ExpectTrue 'shortcut written' (Test-Path $r.Links[0])
  Expect 'shortcut name' (Split-Path -Leaf $r.Links[0]) 'Unlock my GPU on next boot.lnk'
  ExpectTrue 'the shortcut asks for administrator approval' (Test-ShortcutRunsAsAdmin $r.Links[0])
@@ -44,27 +43,15 @@ try {
  ExpectTrue 'it starts Windows PowerShell with the generated script' (($l.TargetPath -like '*WindowsPowerShell\v1.0\powershell.exe') -and ($l.Arguments -like "*-File `"$($r.Script)`"*") -and ($l.Arguments -like '*-NoProfile*'))
  ExpectTrue 'the script file parses' ((Get-Content $r.Script -Raw) -like '*Queues ONE unlock*')
  Expect 'the script is protected: nobody but administrators/SYSTEM can change it' (@(Get-SecurityProblems $r.Script)).Count 0
- Expect 'the Start menu shortcut is protected too' (@(Get-SecurityProblems $r.Links[0])).Count 0
  $j = @(Read-Journal)
  Expect 'two journaled changes, both done' (@($j | Where-Object { $_.Phase -eq 'schedule' -and $_.Status -eq 'done' }).Count) 2
  $n = $j.Count
  [void](New-UnlockShortcut @{} 'manual' -DryRun)
  Expect 'dry run writes and journals nothing' @(Read-Journal).Count $n
- # an optional desktop copy
- $rd = New-UnlockShortcut @{} 'manual' -Desktop
- Expect 'with the desktop option there are two shortcuts' $rd.Links.Count 2
- ExpectTrue 'the second one is on the desktop' ($rd.Links[1] -like "$desk*" -and (Test-Path $rd.Links[1]))
- ExpectTrue 'the desktop copy also asks for administrator approval' (Test-ShortcutRunsAsAdmin $rd.Links[1])
- Remove-Item $rd.Links[1] -Force
- # re-running replaces both and records that they existed
+ # re-running replaces the script and shortcut, and records that they existed
  $r2 = New-UnlockShortcut @{} 'automatic'
  Expect 'a second run records that the files existed' @(Read-Journal)[-1].Previous.Existed $true
  ExpectTrue 'the script now says no key is needed' ((Get-Content $r2.Script -Raw) -like '*no key is needed*')
- # a Start menu folder that ordinary users can write to is refused
- & icacls.exe $start /grant '*S-1-5-32-545:(OI)(CI)M' /Q | Out-Null
- ExpectThrows 'a shortcut in a folder ordinary users can change is removed and refused' { New-UnlockShortcut @{} 'manual' } '*can be changed by ordinary users*'
- ExpectTrue 'and no shortcut is left there' (-not (Test-Path (Join-Path $start 'Unlock my GPU on next boot.lnk')))
- Protect-DataFolder $start
  $r = New-UnlockShortcut @{} 'manual'
  }
 
@@ -162,21 +149,20 @@ class P { static int Main(string[] a) { File.AppendAllText(Environment.GetEnviro
 
  # ---------------- the phase ----------------
  $opt = @{ DryRun = $false; ReportFolder = ''; CaptureFolder = $null }
- Get-ChildItem $start -Filter '*.lnk' | Remove-Item -Force
+ Get-ChildItem $desk -Filter '*.lnk' | Remove-Item -Force
  $st = [ordered]@{}
- Set-Answers @('Y', 'N'); $res2 = Invoke-Phase-schedule $st $opt
+ Set-Answers @('Y'); $res2 = Invoke-Phase-schedule $st $opt
  Expect 'phase: extra 1 is offered after the shortcut' $res2.Next 'extra1-offer'
- ExpectTrue 'phase: the Start menu shortcut exists, no desktop copy was made, and it is recorded' ((Test-Path $r.Links[0]) -and -not (Get-ChildItem $desk -Filter '*.lnk') -and $st.Shortcut.Mode -eq 'manual' -and $st.Shortcut.Links.Count -eq 1)
- ExpectTrue 'phase: it explains the desktop copy risk' ((OutText) -like '*any program running as you can edit a desktop shortcut*')
+ ExpectTrue 'phase: the desktop shortcut exists and is recorded' ((Test-Path $r.Links[0]) -and $st.Shortcut.Mode -eq 'manual' -and $st.Shortcut.Links.Count -eq 1)
+ ExpectTrue 'phase: it explains the desktop shortcut risk' ((OutText) -like '*any program running as you can edit a desktop shortcut*')
  ExpectTrue 'phase: it explains what lasts until power-off' ((OutText) -like '*lasts until the PC is powered off or goes to sleep*')
  $st = [ordered]@{ Automatic = [ordered]@{ Active = $true } }
- Set-Answers @('Y', 'Y'); [void](Invoke-Phase-schedule $st $opt)
+ Set-Answers @('Y'); [void](Invoke-Phase-schedule $st $opt)
  Expect 'phase: automatic mode makes the automatic shortcut' $st.Shortcut.Mode 'automatic'
- Expect 'phase: Y to the desktop question adds the desktop copy' $st.Shortcut.Links.Count 2
- Get-ChildItem $start, $desk -Filter '*.lnk' | Remove-Item -Force
+ Get-ChildItem $desk -Filter '*.lnk' | Remove-Item -Force
  $st = [ordered]@{}; Set-Answers @('N'); $res2 = Invoke-Phase-schedule $st $opt
  ExpectTrue 'declining makes no shortcut and says how else to unlock again' ((-not (Test-Path $r.Links[0])) -and ((OutText) -like '*run this installer again*') -and -not $st.Contains('Shortcut'))
- Set-Answers @('Y', 'N'); [void](Invoke-Phase-schedule ([ordered]@{}) @{ DryRun = $true; ReportFolder = ''; CaptureFolder = $null })
+ Set-Answers @('Y'); [void](Invoke-Phase-schedule ([ordered]@{}) @{ DryRun = $true; ReportFolder = ''; CaptureFolder = $null })
  ExpectTrue 'dry run: no shortcut' (-not (Test-Path $r.Links[0]))
 } finally { Remove-TestRoot $t; Remove-Item Env:FAKE_LOG, Env:FAKE_BCD_FILE, Env:FAKE_SET_CODE -ErrorAction SilentlyContinue }
 Complete-Tests
