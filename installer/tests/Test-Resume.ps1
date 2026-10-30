@@ -155,6 +155,7 @@ if (Get-SysIsAdmin) {
   ExpectTrue 'it is not elevated by itself' ($task.Principal.RunLevel -eq 'Limited')
   ExpectTrue 'it runs in the interactive session, not hidden' ($task.Principal.LogonType -eq 'Interactive')
   ExpectTrue 'it is triggered at log on' ($task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger')
+  ExpectTrue 'it waits for the session to settle before firing' ($task.Triggers[0].Delay -eq 'PT20S')
   Remove-SysResumeTask
   Expect 'removing it leaves nothing behind' (Get-SysResumeTask) $null
   Remove-SysResumeTask   # idempotent

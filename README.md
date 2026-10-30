@@ -74,10 +74,10 @@ tallies, file-rename bookkeeping) that only matters to someone editing the code.
 ### 2026-10-30 - The automatic-resume-after-restart step is more reliable
 
 The window that's supposed to appear after a restart, asking whether to continue, used to occasionally
-never appear at all - no error, nothing on screen, just silence - for reasons that turned out to be
-outside the installer's own control. It now uses a different, more dependable mechanism to relaunch
-itself after you log back in. Nothing about what it asks, or when it asks for administrator approval,
-has changed.
+never appear at all - no error, nothing on screen, just silence. It now uses a different, more dependable
+mechanism to relaunch itself after you log back in, and waits a short moment after login before trying, so
+it isn't racing the desktop session's own startup. Nothing about what it asks, or when it asks for
+administrator approval, has changed.
 
 ### 2026-10-30 - The "unlock again" shortcut is now desktop-only
 

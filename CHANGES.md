@@ -1,5 +1,38 @@
 # Changes
 
+## 2026-10-30 - The diagnostic log itself couldn't write; found why the resume keeps failing, and mitigated it
+
+- The scheduled-task migration got its first real test on an actual login a few minutes after being set up:
+  Task Scheduler's own operational log (enabled today specifically for this - it's off by default) confirms
+  the "at log on" trigger fired, launched the process, and that process ran for about 8 seconds before
+  exiting with an unhandled-error code. The installer's own `last-launch.log`, though, was still completely
+  empty for that launch.
+- Root cause of the empty log, found by testing directly: `last-launch.log` was being written inside this
+  project's own installer data folder, which `Protect-DataFolder` deliberately locks to Administrators and
+  SYSTEM only. `-Resume` always starts non-elevated - by design, specifically so the dialog can show before
+  anyone approves elevation - and a non-elevated process, even one run by an administrator account, cannot
+  write there: Windows' UAC split token marks the Administrators SID "deny only" on the filtered token, so
+  the ACL's Administrators grant simply isn't available to check against. Confirmed directly: `whoami
+  /groups` on a non-elevated session shows exactly that "deny only" marking, and a plain write to the old
+  log path failed with Access Denied; the same write to the new path succeeded. Every `Out-File` call already
+  had `-ErrorAction SilentlyContinue` (so a logging failure could never break the actual resume), which meant
+  the Access Denied was being swallowed silently every single time, on every launch, from the moment the
+  logging was added - it could never have produced evidence, logging the one case that most needed it.
+  Moved `last-launch.log` to the current user's own per-profile folder (`%LOCALAPPDATA%\WindowsGPUUnlock`),
+  which needs no elevation to write to either before or after Continue is clicked. Verified directly, both
+  ways: the old path still refuses a non-elevated write, the new one now succeeds.
+- Separately, likely (not yet confirmed) root cause of the 8-second-then-crash itself: an "at log on" trigger
+  fires essentially the instant Windows considers the user logged on, which can be before the desktop session
+  has actually finished settling - a well-known class of problem for logon-triggered tasks that depend on a
+  fully-up session, and manual testing all day (always run well after an active session was already settled)
+  would never have reproduced it. `Set-SysResumeTask` (`installer/Resume.ps1`) now sets a 20-second delay on
+  the trigger (`$trigger.Delay = 'PT20S'`) before it's allowed to fire, to give the session room to finish
+  coming up first. This changes nothing about what runs or how it's elevated, only when it's allowed to start.
+- Verified: `Run-AllTests.ps1`, 1161 of 1161, run elevated (the new trigger-delay property included in
+  `Test-Resume.ps1`'s real-system verification block).
+- Still open: whether the 20-second delay actually prevents the crash is unconfirmed until the next real
+  login exercises it - but `last-launch.log` can now actually answer that, which it couldn't before this fix.
+
 ## 2026-10-30 - Replaced the automatic-resume RunOnce entry with a scheduled task
 
 - The diagnostic logging added earlier today got its answer on the very next restart: `last-launch.log` was

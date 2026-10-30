@@ -38,6 +38,12 @@ function Set-SysResumeTask([string]$ScriptPath) {
  $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
  $action = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Resume' -f $ScriptPath)
  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+ # Found live, 2026-10-30: the very first real "at log on" firing launched (Task Scheduler's own operational
+ # log confirms this), ran for a few seconds, then exited with an unhandled error - immediately at login,
+ # before the desktop session had necessarily finished settling. A short delay is the standard mitigation for
+ # a logon-triggered task that depends on the session being fully up; this does not touch WHAT runs, only
+ # gives the session a head start before it does.
+ $trigger.Delay = 'PT20S'
  # LogonType Interactive + RunLevel Limited: runs as the signed-in user, in their own desktop session, not elevated by
  # itself - the same as the RunOnce value it replaces. The dialog still shows first; only clicking Continue elevates.
  $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited

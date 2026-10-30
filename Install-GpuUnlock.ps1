@@ -7,14 +7,20 @@ param([switch]$Elevated, [switch]$DryRun, [string]$CaptureFolder, [switch]$Resum
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSCommandPath
 
-# Found live, 2026-10-30: the automatic-resume RunOnce entry (-Resume) repeatedly consumed itself at login
-# with nothing ever visibly appearing - no window, no console, no trace of any kind - while the exact same
-# command line, run manually, worked every time. RunOnce has no console attached and nowhere to show a
-# terminating error, so a failure this early (loading a module, or Test-DesktopAvailable itself) would look
-# exactly like "nothing happened" and leave no evidence to tell that apart from the resume dialog silently
-# hanging. This writes one line unconditionally before anything else can fail, and another once loading and
-# the window/console decision succeed, so the next time this happens at login the log says which it was.
-$traceLog = Join-Path $env:ProgramData 'WindowsGPUUnlock\installer\last-launch.log'
+# Found live, 2026-10-30: the automatic-resume entry (first RunOnce, then a scheduled task after 10-30's
+# migration) repeatedly consumed/fired itself at login with nothing ever visibly appearing - no window, no
+# console, no trace of any kind - while the exact same command line, run manually, worked every time. This
+# writes one line unconditionally before anything else can fail, and another once loading and the
+# window/console decision succeed, so a failure this early leaves an actual trace instead of looking exactly
+# like "nothing happened".
+# The log itself was first written to the installer's own ProgramData folder - which this project
+# deliberately locks to Administrators/SYSTEM only (Protect-DataFolder). -Resume always starts non-elevated,
+# by design, specifically so the dialog can show before anyone approves elevation - so every write to that
+# log, from the one launch that most needed logging, silently failed on Access Denied (every write below
+# already has -ErrorAction SilentlyContinue, so a run never fails *because* logging failed - it just means
+# nothing was ever actually written). Moved to the current user's own per-profile folder instead, which
+# needs no elevation to write to either before or after Continue is clicked.
+$traceLog = Join-Path $env:LOCALAPPDATA 'WindowsGPUUnlock\last-launch.log'
 try {
  $traceDir = Split-Path -Parent $traceLog
  if (-not (Test-Path -LiteralPath $traceDir)) { [void](New-Item -ItemType Directory -Path $traceDir -Force) }
