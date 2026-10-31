@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-30 - A full install, start to finish, completed with no errors
+
+- After every fix below, the reporter's own fresh-clone bugs (GitHub issue #1) plus the benchmark build
+  crash found on the maintainer's own machine, a complete run of the installer - start to finish - finished
+  with no errors, on the reference machine.
+- This was the explicit condition the 2026-10-28 pause notice in README.md set for lifting it ("This notice
+  comes down once that one clean run is confirmed"). Lifted the notice and updated the status line.
+
 ## 2026-10-30 - Correction #2: removing the flag outright was also wrong - the real fix picks a VC++ Tools install CUDA actually supports
 
 - Removing `-allow-unsupported-compiler` outright (previous entry below) reintroduced the exact original

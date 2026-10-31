@@ -1,17 +1,11 @@
 # Windows GPU UNLOCK - universal installer fork
 
-> **⏸ Paused, 2026-10-28: please hold off running the installer for now.** Actually running the installer wizard
-> start-to-finish (not just the unlock mechanism underneath it) surfaced several real, previously-unknown bugs today -
-> most now fixed and pushed, one full clean end-to-end pass still not yet confirmed. See
-> [the changelog](#changelog) below for exactly what changed and why. This notice comes down once that one clean
-> run is confirmed.
-
 A fork of [impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK), the Windows UEFI
 port of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock). It runs a short program before Windows starts that sets the tensor-math
 speed selectors of one RTX 30 series card, then hands over to Windows without a reset. This fork adds a guided, self-service installer
 (text and graphical) with roll back, update-in-place and a full test suite, built and verified on one documented machine.
 
-**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: paused - see the notice above.** Only one machine is known to have gotten this far - see what that means for other hardware in [What has been verified](#what-has-been-verified-one-machine-2026-10-25) below. Everything below describes that machine unless noted otherwise.
+**[Download the latest release](https://github.com/sargentmajord/Windows-GPU-UNLOCK/releases/latest)** (`Install-GpuUnlock.cmd`; how to use it: [docs/INSTALLER-GUIDE.en.md](docs/INSTALLER-GUIDE.en.md)). **Status: stable for now - a full install, start to finish, completed with no errors on 2026-10-30** (see [the changelog](#changelog) below for what was fixed to get there). Only one machine is known to have gotten this far - see what that means for other hardware in [What has been verified](#what-has-been-verified-one-machine-2026-10-25) below. Everything below describes that machine unless noted otherwise.
 
 ## Read this before trying anything
 
@@ -70,6 +64,11 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
+
+### 2026-10-30 - A full install, start to finish, completed with no errors
+
+After the fixes below, a complete run of the installer - start to finish - finished cleanly with no errors
+on the reference machine. The pause notice that was here is lifted; this was the condition for lifting it.
 
 ### 2026-10-30 - Fixed a compiler crash in the optional benchmark's build step
 
