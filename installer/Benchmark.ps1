@@ -51,15 +51,7 @@ function Initialize-Benchmark($State, $Tools, [switch]$DryRun) {
    $r = Invoke-SysBenchmarkProcess (New-ScriptCall (Join-Path $repoBench 'setup.ps1') ([ordered]@{ Root = $root }))
    if ($r.Code -ne 0) { throw ('Downloading the CUDA components failed: ' + $r.Output) }
   }
-  # nvcc's own subprocess (cudafe++) has been seen to crash once (ACCESS_VIOLATION) and then build cleanly
-  # on an immediate retry with nothing else changed - seen live, 2026-10-30, on a build that passed right
-  # after failing, no code or environment change in between. One automatic retry before giving up.
-  $buildCall = New-ScriptCall (Join-Path $repoBench 'build.ps1') ([ordered]@{ Root = $root; VcVars = $be.VcVars })
-  Invoke-WithBuildEnvironment $be { $script:__b = Invoke-SysBenchmarkProcess $buildCall }
-  if ($script:__b.Code -ne 0) {
-   Write-Plain 'The benchmark build failed; trying once more automatically (this can happen when something else briefly collides with the compiler).'
-   Invoke-WithBuildEnvironment $be { $script:__b = Invoke-SysBenchmarkProcess $buildCall }
-  }
+  Invoke-WithBuildEnvironment $be { $script:__b = Invoke-SysBenchmarkProcess (New-ScriptCall (Join-Path $repoBench 'build.ps1') ([ordered]@{ Root = $root; VcVars = $be.VcVars })) }
   if ($script:__b.Code -ne 0) { throw ('Building the benchmark failed: ' + $script:__b.Output) }
  })
 }

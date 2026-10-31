@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-10-30 - Correction: the cudafe++ crash was `-allow-unsupported-compiler`, not transient interference; removed it and the retry
+
+- The retry added for the cudafe++ `ACCESS_VIOLATION` crash (previous entry below) was not the fix: the same
+  build hit the identical crash again on the very next real run, including on the automatic retry itself.
+  Told directly to stop treating the symptom and find the actual cause instead.
+- Found by reading CUDA 12.6's own `host_config.h` rather than guessing again: its Visual Studio version
+  check accepts any `_MSC_VER` from 1910 up to (not including) 1950. Queried the installed `cl.exe` directly
+  or `/* #include <stdio.h>; printf("%d", _MSC_VER); */` - it reports `_MSC_VER 1944`, squarely inside that
+  accepted range. So `-allow-unsupported-compiler` (added 2026-10-30, see below) was never actually needed
+  to get past that check for this compiler - and the flag's real effect reaches further than that one check:
+  it relaxes other internal nvcc/host-compiler validation too, which is a plausible, better-fitting
+  explanation for an intermittent crash inside nvcc's own compiler subprocess than "something external
+  collided with it." Rebuilt `compute-benchmark.cu` six times in a row with the flag removed entirely:
+  6 of 6 clean. Removed it from `benchmark/build.ps1`.
+- Also removed the automatic retry from `installer/Benchmark.ps1`'s `Initialize-Benchmark` added for the
+  same incident - it was covering for a bug that is now actually fixed, and keeping it would have silently
+  hidden a real recurrence if this (or anything else) ever broke the build again. A single failed build is
+  reported as an error again, not retried.
+- Verified: `Run-AllTests.ps1`, 1182 of 1182, run elevated (the two retry-specific tests added for the
+  removed behavior were removed with it).
+
 ## 2026-10-30 - The benchmark build now retries once on a transient compiler crash
 
 - Found live: the benchmark build failed with `nvcc error: 'cudafe++' died with status 0xC0000005

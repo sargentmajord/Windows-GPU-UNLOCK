@@ -86,29 +86,6 @@ try {
  Expect 'and failed in the journal' @(Read-Journal)[-1].Status 'failed'
  $script:ProcCode = 0
 
- # ---------------- the build retries once on a transient compiler crash ----------------
- Remove-Item (Get-BenchmarkRoot) -Recurse -Force -ErrorAction SilentlyContinue; $script:Procs.Clear()
- $script:BuildCodes = New-Object System.Collections.Queue
- function Invoke-SysBenchmarkProcess([string]$CommandText) {
-  [void]$script:Procs.Add($CommandText)
-  if ($CommandText -like '*setup.ps1*') { [void](New-Item -ItemType Directory -Path (Join-Path (Get-BenchmarkRoot) 'packages\libcublas') -Force); return [pscustomobject]@{ Code = 0; Output = 'process output' } }
-  $code = if ($script:BuildCodes.Count) { $script:BuildCodes.Dequeue() } else { 0 }
-  if ($code -eq 0) { [void](New-Item -ItemType Directory -Path (Join-Path (Get-BenchmarkRoot) 'bin') -Force); Set-Content (Join-Path (Get-BenchmarkRoot) 'bin\compute-benchmark.exe') 'x'; Set-Content (Join-Path (Get-BenchmarkRoot) 'build-manifest.json') '[]' }
-  [pscustomobject]@{ Code = $code; Output = 'process output' }
- }
- $script:BuildCodes.Enqueue(5); $script:BuildCodes.Enqueue(0)
- Initialize-Benchmark $st $tools
- Expect 'setup, the failed build, then the same build retried' $script:Procs.Count 3
- ExpectTrue 'the retry is the exact same build call' ($script:Procs[1] -eq $script:Procs[2])
- ExpectTrue 'says it is retrying automatically' ((OutText) -like '*trying once more automatically*')
- ExpectTrue 'built after the retry succeeded' (Test-BenchmarkBuilt)
-
- Remove-Item (Get-BenchmarkRoot) -Recurse -Force; $script:Procs.Clear()
- $script:BuildCodes.Enqueue(5); $script:BuildCodes.Enqueue(5)
- ExpectThrows 'two failures in a row is a real error, not retried forever' { Initialize-Benchmark $st $tools } '*Building the benchmark failed*process output*'
- Expect 'exactly one retry: two build attempts total' (@($script:Procs | Where-Object { $_ -like '*build.ps1*' })).Count 2
- Expect 'failed in the journal' @(Read-Journal)[-1].Status 'failed'
-
  # ---------------- a run through the mocked process ----------------
  $resDir = Join-Path $t 'res'; [void](New-Item -ItemType Directory $resDir)
  $summary = [pscustomobject]@{ Label = 'before'; Bus = '01:00.0'; Gpu = 'NVIDIA GeForce RTX 3060'; DriverVersion = '617.42'; MaxPowerWatts = 120; MaxTempC = 61; MaxSmClockMhz = 1900

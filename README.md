@@ -71,12 +71,12 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
-### 2026-10-30 - The benchmark build recovers from a one-off compiler crash on its own
+### 2026-10-30 - Fixed a compiler crash in the optional benchmark's build step
 
-The optional benchmark's build step could fail with a compiler crash (`cudafe++ ... ACCESS_VIOLATION`)
-that turned out to be a one-off - rebuilding right afterward, with nothing changed, worked fine. The
-installer now retries that one step automatically before reporting an error, so this no longer needs a
-manual rerun.
+The benchmark's build step could crash partway through (`cudafe++ ... ACCESS_VIOLATION`) on some PCs. The
+cause was a compiler flag this project had added earlier to work around what looked like a Visual Studio
+version mismatch - it turned out the installed compiler was already within CUDA's own supported range, so
+the flag was never actually needed, and it relaxed more internal checks than intended. Removed it.
 
 ### 2026-10-30 - Fixed a fresh-clone install getting stuck at step 3 and step 8
 

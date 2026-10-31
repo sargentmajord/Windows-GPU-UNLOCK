@@ -18,12 +18,7 @@ if ($LASTEXITCODE -ne 0) { throw 'vcvars64 failed' }
 foreach ($line in $vcLines) {
     if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
 }
-# -allow-unsupported-compiler: found live, 2026-10-30. CUDA 12.6's host_config.h hard-refuses any cl.exe
-# newer than a fixed, baked-in MSVC version range, which an ordinary VS2022 BuildTools update (19.44 here,
-# still genuinely VS2022, just a later point release than 12.6 shipped with knowledge of) can exceed on its
-# own with no action from this project. nvcc's own error message names this exact flag as the sanctioned way
-# past that specific check; it does not relax anything else nvcc or cl.exe would otherwise enforce.
-& (Join-Path $nvcc 'bin\nvcc.exe') -std=c++17 -O3 -arch=sm_86 -Xcompiler /utf-8 -allow-unsupported-compiler `
+& (Join-Path $nvcc 'bin\nvcc.exe') -std=c++17 -O3 -arch=sm_86 -Xcompiler /utf-8 `
     "-I$runtime\include" "-I$cccl\include" "-I$blas\include" `
     "-L$runtime\lib\x64" "-L$blas\lib\x64" `
     $source -lcublas -o (Join-Path $bin 'compute-benchmark.exe')
