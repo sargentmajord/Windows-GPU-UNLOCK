@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-10-30 - The benchmark build now retries once on a transient compiler crash
+
+- Found live: the benchmark build failed with `nvcc error: 'cudafe++' died with status 0xC0000005
+  (ACCESS_VIOLATION)`. Checked directly rather than assuming the toolchain was actually broken: re-ran the
+  exact same `benchmark/build.ps1` command immediately afterward, with no code or environment change at
+  all, and it built cleanly (nvcc, cl.exe and the CUDA version check all matched what passed before). So
+  this specific failure was a one-off crash in nvcc's own compiler subprocess, not a real incompatibility -
+  the kind of thing a background scan or other momentary load can trigger in a spawned child process.
+- `installer/Benchmark.ps1`'s `Initialize-Benchmark` now retries the build step itself once, automatically,
+  before giving up, telling the person it is doing so. The download step is unchanged (still one attempt,
+  still a real error if it fails) - only the compiler invocation, the part just shown to fail transiently
+  and then succeed with nothing else different, gets the retry.
+- Verified: `Run-AllTests.ps1`, 1189 of 1189, run elevated (new coverage: a build that fails once then
+  succeeds on the retry, and the case where it fails twice in a row and is still reported as a real error,
+  not retried forever).
+
 ## 2026-10-30 - Fixed two bugs reported live on a fresh clone (issue #1): the LLVM install and the diagnostic build
 
 - Reported live by a real tester on a fresh clone (GitHub issue #1, testing the 10-28 build with LLVM

@@ -71,6 +71,13 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - The benchmark build recovers from a one-off compiler crash on its own
+
+The optional benchmark's build step could fail with a compiler crash (`cudafe++ ... ACCESS_VIOLATION`)
+that turned out to be a one-off - rebuilding right afterward, with nothing changed, worked fine. The
+installer now retries that one step automatically before reporting an error, so this no longer needs a
+manual rerun.
+
 ### 2026-10-30 - Fixed a fresh-clone install getting stuck at step 3 and step 8
 
 A tester reported installing LLVM at step 3 looked like it failed (a confusing `System.Object[]` error) even
