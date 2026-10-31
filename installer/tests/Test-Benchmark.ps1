@@ -55,6 +55,53 @@ try {
  Set-Answers @('N'); ExpectTrue 'N skips' (-not (Ask-Benchmark))
  ExpectTrue 'skipping says improvement is not measured' ((OutText) -like '*improvement not measured*')
 
+ # ---------------- Find-CudaVcVars: a VC++ Tools install CUDA 12.6 actually supports ----------------
+ $script:VsPaths = @(); function Get-SysVsInstallPaths { $script:VsPaths }
+ $script:ToolsetVersions = @{}; function Get-SysLatestToolsetVersion([string]$ToolsDir) { $script:ToolsetVersions[$ToolsDir] }
+ $script:VcExists = @{}; function Get-SysFileExists([string]$Path) { [bool]$script:VcExists[$Path] }
+
+ ExpectTrue 'no VS installs at all: nothing found' ($null -eq (Find-CudaVcVars))
+
+ $script:VsPaths = @('C:\VS\Old')
+ $script:VcExists = @{ 'C:\VS\Old\VC\Auxiliary\Build\vcvars64.bat' = $true }
+ $script:ToolsetVersions = @{ 'C:\VS\Old\VC\Tools\MSVC' = '14.44.35207' }
+ $f = Find-CudaVcVars
+ Expect 'an in-range toolset is picked' $f.VcVars 'C:\VS\Old\VC\Auxiliary\Build\vcvars64.bat'
+ Expect 'its _MSC_VER is read from the toolset folder name' $f.MscVer 1944
+
+ $script:VsPaths = @('C:\VS\New')
+ $script:VcExists = @{ 'C:\VS\New\VC\Auxiliary\Build\vcvars64.bat' = $true }
+ $script:ToolsetVersions = @{ 'C:\VS\New\VC\Tools\MSVC' = '14.51.36231' }
+ ExpectTrue 'a too-new toolset alone is refused, never forced through' ($null -eq (Find-CudaVcVars))
+
+ $script:VsPaths = @('C:\VS\Ancient')
+ $script:VcExists = @{ 'C:\VS\Ancient\VC\Auxiliary\Build\vcvars64.bat' = $true }
+ $script:ToolsetVersions = @{ 'C:\VS\Ancient\VC\Tools\MSVC' = '14.09.00000' }
+ ExpectTrue 'a too-old toolset alone is also refused' ($null -eq (Find-CudaVcVars))
+
+ # two installs side by side, like the PC this was found live on: the newest IN-RANGE one wins, not simply
+ # the newest overall - that "latest wins" rule is right for Find-VcVars (everything else this installer
+ # builds) but is exactly what picked the wrong one here.
+ $script:VsPaths = @('C:\VS\Old', 'C:\VS\New', 'C:\VS\Mid')
+ $script:VcExists = @{
+  'C:\VS\Old\VC\Auxiliary\Build\vcvars64.bat' = $true
+  'C:\VS\New\VC\Auxiliary\Build\vcvars64.bat' = $true
+  'C:\VS\Mid\VC\Auxiliary\Build\vcvars64.bat' = $true
+ }
+ $script:ToolsetVersions = @{
+  'C:\VS\Old\VC\Tools\MSVC' = '14.44.35207'
+  'C:\VS\New\VC\Tools\MSVC' = '14.51.36231'
+  'C:\VS\Mid\VC\Tools\MSVC' = '14.48.00000'
+ }
+ $f = Find-CudaVcVars
+ Expect 'the highest in-range toolset wins, skipping the newer out-of-range one' $f.VcVars 'C:\VS\Mid\VC\Auxiliary\Build\vcvars64.bat'
+ Expect 'its _MSC_VER' $f.MscVer 1948
+
+ $script:VsPaths = @('C:\VS\NoVcVars')
+ $script:VcExists = @{}
+ $script:ToolsetVersions = @{ 'C:\VS\NoVcVars\VC\Tools\MSVC' = '14.44.00000' }
+ ExpectTrue 'an install missing vcvars64.bat is skipped, not an error' ($null -eq (Find-CudaVcVars))
+
  # ---------------- preparation (mocked processes) ----------------
  Set-RepoRoot $repo
  Set-InstallerRoot (Join-Path $t 'inst')
@@ -69,6 +116,7 @@ try {
   if ($CommandText -like '*build.ps1*' -and $script:ProcCode -eq 0) { [void](New-Item -ItemType Directory -Path (Join-Path (Get-BenchmarkRoot) 'bin') -Force); Set-Content (Join-Path (Get-BenchmarkRoot) 'bin\compute-benchmark.exe') 'x'; Set-Content (Join-Path (Get-BenchmarkRoot) 'build-manifest.json') '[]' }
   [pscustomobject]@{ Code = $script:ProcCode; Output = 'process output' }
  }
+ function Find-CudaVcVars { [pscustomobject]@{ VcVars = 'C:\CUDA\vcvars64.bat'; MscVer = 1944 } }
  $st = [ordered]@{ Cards = [ordered]@{ Target = [ordered]@{ Bus = '01:00.0' } } }
  ExpectTrue 'not built at first' (-not (Test-BenchmarkBuilt))
  Initialize-Benchmark $st $tools -DryRun
@@ -76,7 +124,7 @@ try {
  Initialize-Benchmark $st $tools
  Expect 'setup then build' $script:Procs.Count 2
  ExpectTrue 'setup writes into the installer work folder, not the repo' ($script:Procs[0] -like "*setup.ps1* -Root '$(Get-BenchmarkRoot)'*")
- ExpectTrue 'build gets the work folder and the MSVC environment file' ($script:Procs[1] -like "*build.ps1* -Root '$(Get-BenchmarkRoot)' -VcVars 'C:\VS\vcvars64.bat'*")
+ ExpectTrue 'build gets the work folder and a VC++ Tools install CUDA actually supports, not just "the latest" one' ($script:Procs[1] -like "*build.ps1* -Root '$(Get-BenchmarkRoot)' -VcVars 'C:\CUDA\vcvars64.bat'*")
  ExpectTrue 'built now' (Test-BenchmarkBuilt)
  Initialize-Benchmark $st $tools
  Expect 'a second call changes nothing' $script:Procs.Count 2
@@ -85,6 +133,14 @@ try {
  ExpectThrows 'a failing download is reported with its output' { Initialize-Benchmark $st $tools } '*Downloading the CUDA components failed*process output*'
  Expect 'and failed in the journal' @(Read-Journal)[-1].Status 'failed'
  $script:ProcCode = 0
+
+ # no VC++ Tools install on the PC is within the range CUDA 12.6 supports: a clear error, never a forced build
+ Remove-Item (Get-BenchmarkRoot) -Recurse -Force -ErrorAction SilentlyContinue; $script:Procs.Clear()
+ function Find-CudaVcVars { $null }
+ ExpectThrows 'no compatible toolset is a clear, specific error' { Initialize-Benchmark $st $tools } '*No installed Visual Studio C++ Tools version is one CUDA 12.6 supports*'
+ Expect 'the download still ran, but the build was never attempted' (@($script:Procs | Where-Object { $_ -like '*build.ps1*' })).Count 0
+ Expect 'failed in the journal' @(Read-Journal)[-1].Status 'failed'
+ function Find-CudaVcVars { [pscustomobject]@{ VcVars = 'C:\CUDA\vcvars64.bat'; MscVer = 1944 } }
 
  # ---------------- a run through the mocked process ----------------
  $resDir = Join-Path $t 'res'; [void](New-Item -ItemType Directory $resDir)

@@ -1,5 +1,35 @@
 # Changes
 
+## 2026-10-30 - Correction #2: removing the flag outright was also wrong - the real fix picks a VC++ Tools install CUDA actually supports
+
+- Removing `-allow-unsupported-compiler` outright (previous entry below) reintroduced the exact original
+  error it was added for: `fatal error C1189: #error: -- unsupported Microsoft Visual Studio version!`,
+  live, through the real installer. That error was real, not a false alarm - but the "just remove the flag"
+  fix was tested wrong: the manual rebuild used a hardcoded `-VcVars` path, not the one the installer itself
+  actually resolves, so it never exercised the real failure.
+- Found the real cause: this PC has two separate Visual Studio C++ Tools installs side by side - an older
+  one (`...\2022\BuildTools`, MSVC toolset 14.44, `_MSC_VER 1944`) and a newer one
+  (`...\18\BuildTools`, toolset 14.51, `_MSC_VER 1951`), confirmed directly by compiling and running a
+  one-line `_MSC_VER` probe against each. CUDA 12.6's `host_config.h` only accepts 1910 through 1949.
+  `installer/Tools.ps1`'s `Find-VcVars` - correctly, for everything else this installer builds - always
+  takes "whichever VS install is latest" via `vswhere -latest`, which is the newer, genuinely
+  out-of-range one here. `-allow-unsupported-compiler` had been forcing nvcc through with that one, which
+  fits the intermittent cudafe++ `ACCESS_VIOLATION` crash far better than either theory tried before it.
+- Fixed with a second, narrower lookup used only for the benchmark: `Find-CudaVcVars`
+  (`installer/Benchmark.ps1`) looks at every VC++ Tools install actually present - not just the latest -
+  and picks the highest one that falls inside CUDA 12.6's own supported range, never forcing an
+  out-of-range one through. If literally none qualify, it now fails with a specific, honest message
+  instead of trying anyway. `Find-VcVars`'s general "latest wins" rule is untouched, since it is the right
+  rule for the boot/diagnostic build and everything else that uses it.
+- Verified for real, not just against mocks: called the new lookup directly against this PC - it picks the
+  `2022` install (`_MSC_VER 1944`) and skips the `18` one, exactly as intended - then ran the edited
+  `benchmark/build.ps1` end to end with that exact path against the real downloaded CUDA packages, which
+  built and passed its metadata check cleanly.
+- Verified: `Run-AllTests.ps1`, 1193 of 1193, run elevated (new coverage: `Find-CudaVcVars` picking the
+  highest in-range toolset over a newer out-of-range one, refusing when every install is out of range,
+  skipping an install with no `vcvars64.bat`, and `Initialize-Benchmark` failing clearly - without even
+  attempting a build - when nothing on the PC qualifies).
+
 ## 2026-10-30 - Correction: the cudafe++ crash was `-allow-unsupported-compiler`, not transient interference; removed it and the retry
 
 - The retry added for the cudafe++ `ACCESS_VIOLATION` crash (previous entry below) was not the fix: the same

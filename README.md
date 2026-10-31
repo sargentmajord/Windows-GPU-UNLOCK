@@ -73,10 +73,11 @@ tallies, file-rename bookkeeping) that only matters to someone editing the code.
 
 ### 2026-10-30 - Fixed a compiler crash in the optional benchmark's build step
 
-The benchmark's build step could crash partway through (`cudafe++ ... ACCESS_VIOLATION`) on some PCs. The
-cause was a compiler flag this project had added earlier to work around what looked like a Visual Studio
-version mismatch - it turned out the installed compiler was already within CUDA's own supported range, so
-the flag was never actually needed, and it relaxed more internal checks than intended. Removed it.
+The benchmark's build step could crash partway through (`cudafe++ ... ACCESS_VIOLATION`) on a PC with more
+than one Visual Studio C++ Tools version installed side by side. It was picking whichever one was newest
+overall for this step, same as everywhere else in the installer - right for everything else, but wrong
+here if the newest one happens to be outside the specific version range NVIDIA's CUDA compiler supports.
+This step now specifically looks for one that is actually in that range, instead.
 
 ### 2026-10-30 - Fixed a fresh-clone install getting stuck at step 3 and step 8
 

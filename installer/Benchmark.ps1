@@ -16,6 +16,45 @@ function Invoke-SysBenchmarkProcess([string]$CommandText) {
  [pscustomobject]@{ Code = $LASTEXITCODE; Output = ($o | Out-String) }
 }
 
+# --- a VC++ Tools install CUDA 12.6 actually supports (replaceable in tests) ---
+function Get-SysVsInstallPaths {
+ foreach ($pf in (Get-SysProgramFiles)) {
+  $vswhere = Join-Path $pf 'Microsoft Visual Studio\Installer\vswhere.exe'
+  if (-not (Get-SysFileExists $vswhere)) { continue }
+  $out = Get-SysToolOutput $vswhere @('-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath')
+  if ($out) { return @($out -split "`r?`n" | Where-Object { $_.Trim() }) }
+ }
+ @()
+}
+function Get-SysLatestToolsetVersion([string]$ToolsDir) {
+ $d = Get-ChildItem -LiteralPath $ToolsDir -Directory -ErrorAction SilentlyContinue | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+ if ($d) { $d.Name } else { $null }
+}
+
+# CUDA 12.6's own host_config.h accepts MSVC _MSC_VER 1910 through 1949 (VS2017 through VS2022) and nothing
+# past it - found live, 2026-10-30: this PC has two VC++ Tools installs side by side (an older one still in
+# that range, and a newer one that genuinely is not: _MSC_VER 1951). -allow-unsupported-compiler had been
+# forcing nvcc through with the newer, out-of-range one, which fits the intermittent cudafe++ crash
+# (ACCESS_VIOLATION) seen the same day far better than the "something external collided with it" theory
+# that was tried and disproved first. Find-VcVars's "latest wins" is the right rule for everything else this
+# installer builds, so this looks at every VC++ Tools install actually present and picks the highest one
+# CUDA 12.6 supports, instead of changing that general rule or forcing an out-of-range one through.
+function Find-CudaVcVars {
+ $best = $null
+ foreach ($root in (Get-SysVsInstallPaths)) {
+  $vc = Join-Path $root 'VC\Auxiliary\Build\vcvars64.bat'
+  if (-not (Get-SysFileExists $vc)) { continue }
+  $toolset = Get-SysLatestToolsetVersion (Join-Path $root 'VC\Tools\MSVC')
+  if (-not $toolset) { continue }
+  $parts = $toolset -split '\.'
+  if ($parts.Count -lt 2) { continue }
+  $mscVer = 1900 + [int]$parts[1]
+  if ($mscVer -lt 1910 -or $mscVer -ge 1950) { continue }
+  if (-not $best -or $mscVer -gt $best.MscVer) { $best = [pscustomobject]@{ VcVars = $vc; MscVer = $mscVer } }
+ }
+ $best
+}
+
 function Show-BenchmarkOffer {
  Write-Plain ''
  Write-Plain 'Benchmark: a before-and-after measurement of your card.'
@@ -51,7 +90,9 @@ function Initialize-Benchmark($State, $Tools, [switch]$DryRun) {
    $r = Invoke-SysBenchmarkProcess (New-ScriptCall (Join-Path $repoBench 'setup.ps1') ([ordered]@{ Root = $root }))
    if ($r.Code -ne 0) { throw ('Downloading the CUDA components failed: ' + $r.Output) }
   }
-  Invoke-WithBuildEnvironment $be { $script:__b = Invoke-SysBenchmarkProcess (New-ScriptCall (Join-Path $repoBench 'build.ps1') ([ordered]@{ Root = $root; VcVars = $be.VcVars })) }
+  $cudaVc = Find-CudaVcVars
+  if (-not $cudaVc) { throw 'No installed Visual Studio C++ Tools version is one CUDA 12.6 supports (MSVC 19.10 through 19.49, VS2017 through VS2022). Install one of those - for example an older VC++ Tools component alongside what is already there - and run the installer again.' }
+  Invoke-WithBuildEnvironment $be { $script:__b = Invoke-SysBenchmarkProcess (New-ScriptCall (Join-Path $repoBench 'build.ps1') ([ordered]@{ Root = $root; VcVars = $cudaVc.VcVars })) }
   if ($script:__b.Code -ne 0) { throw ('Building the benchmark failed: ' + $script:__b.Output) }
  })
 }
