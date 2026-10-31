@@ -74,6 +74,16 @@ $v = Find-VcVars
 Expect 'vcvars found' $v.VcVars 'C:\VS\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
 Expect 'vswhere folder is returned for PATH' $v.VswhereDir 'C:\Program Files (x86)\Microsoft Visual Studio\Installer'
 
+# ---------- the real exit-code wrapper ----------
+# Regression: a native command's own stdout must never leak into the returned exit code. It did, for
+# winget specifically, until 2026-10-30 - a real install that printed download progress and then exited 0
+# came back as an array of every printed line plus the 0, which later broke formatting into an error
+# message ("failed with code System.Object[]") on a winget call that had actually succeeded.
+$code = Invoke-SysExeForExitCode 'cmd.exe' @('/c', 'echo one & echo two & exit 7')
+Expect 'exit code after multi-line stdout is the plain int, not the output bundled with it' $code 7
+ExpectTrue 'and it really is a scalar, not a collection' ($code -isnot [array])
+Expect 'no stdout, exit 0: still just the int' (Invoke-SysExeForExitCode 'cmd.exe' @('/c', 'exit 0')) 0
+
 # ---------- install offers ----------
 function Row($Id, $Ok, $Name = $Id) { [pscustomobject]@{ Id = $Id; Name = $Name; Ok = $Ok; Detail = $(if ($Ok) { 'found' } else { 'not found' }); WingetId = "Pkg.$Id"; WingetArgs = @('--extra'); Size = 'about 1 MB'; Source = 'a test source'; Info = $null } }
 $script:State = @{ python = $false; msvc = $true; llvm = $true }

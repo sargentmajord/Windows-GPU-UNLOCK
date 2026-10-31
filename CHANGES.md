@@ -1,5 +1,37 @@
 # Changes
 
+## 2026-10-30 - Fixed two bugs reported live on a fresh clone (issue #1): the LLVM install and the diagnostic build
+
+- Reported live by a real tester on a fresh clone (GitHub issue #1, testing the 10-28 build with LLVM
+  uninstalled first): step 3 failed with `winget install of LLVM.LLVM failed with code System.Object[]`
+  about a minute into the download, even though LLVM had actually installed successfully (confirmed: the
+  next run got past step 3 on its own). Root cause: `Invoke-SysWinget` (`installer/Tools.ps1`) ran winget
+  without capturing its own stdout (`& winget.exe @WingetArgs; $LASTEXITCODE`) - an unassigned
+  native-command statement's output becomes part of the *function's own* return value in PowerShell, so the
+  caller's `$code` was really an array of every line winget printed during the download, plus the real exit
+  code, bundled together - which is exactly what formats to the literal text `System.Object[]`. Every other
+  native-command wrapper in this codebase already captures that output into a throwaway variable first;
+  this was the one that didn't. Fixed by always capturing it (`Invoke-SysExeForExitCode`, reused by
+  `Invoke-SysWinget`); also fixed the same latent shape in `Invoke-SysRestart` (`installer/BootEntry.ps1`),
+  which had the identical pattern, though it was not reported. Also added a line before a tool install
+  starts saying it can take a few minutes and nothing more will print until it is done, since the silence
+  during the download is exactly what made this look stuck rather than just slow.
+- Reported in the same comment: step 8 ("building the read-only diagnostic") then failed with
+  `handoff.c: fatal error: 'generated.h' file not found`. Root cause: `handoff.c` unconditionally
+  `#include`s `generated.h` just to satisfy the compiler - under the diagnostic-only build nothing in it is
+  ever loaded or checked at runtime (this exact fact is already written down in
+  `docs/PROFILE-Z790-3060.en.md` as a manual prerequisite for reproducing the diagnostic build by hand) - but
+  the file is gitignored (it normally comes from a real unlock-child build) and nothing in the *installer's*
+  own build step ever wrote it, so a fresh clone has none and the build fails before compiling anything of
+  its own. Fixed in `installer/Capture.ps1`'s `Build-Diagnostic`: before invoking the build script, write a
+  clearly-labelled, all-zero placeholder `generated.h` only when there truly is none; a real one left over
+  from a full build (as this dev machine already had) is never touched.
+- Verified: `Run-AllTests.ps1`, 1182 of 1182, run elevated (new coverage: the real exit-code wrapper against
+  an actual multi-line-output process, so this is proven against a real native command, not a mock; the
+  diagnostic build writing the placeholder only when missing and never overwriting a real one).
+- Posted a status update on the GitHub issue; will follow up there once this is confirmed fixed on the
+  reporter's machine too.
+
 ## 2026-10-30 - The build-tool uninstall offer moved from Roll back into the normal end-of-install flow
 
 - Raised directly: burying the keep-or-uninstall question inside Roll back only reaches the person who runs

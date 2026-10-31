@@ -53,10 +53,28 @@ function New-BootFolder($State, [string]$Relative, [switch]$DryRun) {
 # --- diagnostic build ---
 function Get-DiscoveryProfileDir($State) { Join-Path (Get-WorkRoot) 'discovery' }
 
+# handoff.c unconditionally #includes generated.h just to satisfy the compiler - under GU_DIAGNOSTIC_ONLY
+# (this build) nothing in it is ever loaded or checked at runtime (docs/PROFILE-Z790-3060.en.md says the
+# same for the manual, by-hand reproduction of this same build). It is gitignored - it normally comes from
+# a real unlock-child build - so a fresh clone of the repo has none, and the diagnostic build fails on a
+# missing header before it ever gets to compiling anything of its own (seen live, 2026-10-30: "handoff.c:
+# fatal error: 'generated.h' file not found"). Only write the placeholder when there truly is none: a real
+# one left over from a full build is harmless here and is never touched.
+function Ensure-DiagnosticGeneratedHeader {
+ $path = Join-Path (Get-RepoRoot) 'internal-boot\boot\generated.h'
+ if (Test-Path -LiteralPath $path -PathType Leaf) { return }
+ @(
+  '/* Placeholder child contract for the read-only diagnostic build only - GU_DIAGNOSTIC_ONLY never loads or checks this. GPL-2.0-only. */'
+  '#define GU_UNLOCK_SHA256 "' + ('0' * 64) + '"'
+  '#define GU_UNLOCK_BYTES 0'
+ ) | Set-Content -LiteralPath $path -Encoding ascii
+}
+
 function Build-Diagnostic($State, $Tools, [switch]$DryRun) {
  $dir = Get-DiscoveryProfileDir $State
  if ($DryRun) { Write-Plain "DRYRUN: build the read-only diagnostic for card $($State.Cards.Target.Id) in $dir"; return [pscustomobject]@{ Path = $null; Sha256 = $null } }
  [void](New-Item -ItemType Directory -Path $dir -Force)
+ Ensure-DiagnosticGeneratedHeader
  $env2 = Get-BuildEnvironment $Tools $dir
  $gen = Invoke-SysPython $env2.Python @((Join-Path (Get-RepoRoot) 'tools\profile_gen.py'), '--discovery', '--target-id', $State.Cards.Target.Id, '--out', (Join-Path $dir 'profile.h'))
  if ($gen.Code -ne 0) { throw ('Could not write the discovery profile: ' + $gen.Output) }

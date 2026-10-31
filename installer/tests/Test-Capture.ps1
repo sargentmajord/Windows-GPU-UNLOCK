@@ -162,11 +162,17 @@ try {
   [pscustomobject]@{ Code = 0; Output = '' }
  }
  function Invoke-SysPowerShellFile([string]$File, [string[]]$FileArgs) { [void]$script:PsCalls.Add($File + ' ' + ($FileArgs -join ' ')); $script:CpathSeen = $env:CPATH; [pscustomobject]@{ Code = 0; Output = '' } }
+ $genHeader = Join-Path $fakeRepo 'internal-boot\boot\generated.h'
+ ExpectTrue 'before the build: no generated.h (a fresh clone has none, it is gitignored)' (-not (Test-Path -LiteralPath $genHeader))
  $b = Build-Diagnostic $state $tools
  ExpectTrue 'discovery profile requested for the chosen id' ($script:PyCalls[0] -like '*--discovery --target-id 10de:2544*')
  ExpectTrue 'build script was run with the tool paths' ($script:PsCalls[0] -like '*build-diagnostic.ps1 -Clang C:\LLVM\bin\clang.exe -LldLink C:\LLVM\bin\lld-link.exe -Python C:\Py\python.exe')
  Expect 'the profile folder was on CPATH during the build' $script:CpathSeen (Get-DiscoveryProfileDir $state)
  ExpectTrue 'returns the built file with its hash' (($b.Path -like '*DIAGNOSTIC.EFI') -and ($b.Sha256 -match '^[0-9a-f]{64}$'))
+ ExpectTrue 'a placeholder generated.h was written before the build script ran, so handoff.c has something to #include' ((Test-Path -LiteralPath $genHeader) -and ((Get-Content -LiteralPath $genHeader -Raw) -like '*GU_UNLOCK_SHA256*0000000000000000000000000000000000000000000000000000000000000000*') -and ((Get-Content -LiteralPath $genHeader -Raw) -like '*GU_UNLOCK_BYTES 0*'))
+ Set-Content -LiteralPath $genHeader -Value 'a real one from a full build, left alone on purpose' -Encoding ascii
+ [void](Build-Diagnostic $state $tools)
+ Expect 'a real generated.h already there is never overwritten' (Get-Content -LiteralPath $genHeader -Raw).Trim() 'a real one from a full build, left alone on purpose'
  Set-Content (Join-Path $fakeRepo 'internal-boot\boot\build\diagnostic\manifest.json') '{"CanUnlock":true,"CanDetach":false,"WritesFirmwareVariables":false}' -Encoding ascii
  ExpectThrows 'a diagnostic that can unlock is refused' { Build-Diagnostic $state $tools } '*can change things*'
  Set-Content (Join-Path $fakeRepo 'internal-boot\boot\build\diagnostic\manifest.json') $manifest -Encoding ascii

@@ -14,7 +14,15 @@ function Get-SysToolOutput([string]$Exe, [string[]]$ToolArgs) {
 }
 function Get-SysProgramFiles { @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } }
 function Get-SysWingetPath { Get-SysCommandPath 'winget.exe' }
-function Invoke-SysWinget([string[]]$WingetArgs) { & winget.exe @WingetArgs; $LASTEXITCODE }
+# Runs an external program and returns only its exit code - never any output it printed. An unassigned
+# native-command statement's own stdout would otherwise become part of THIS function's return value too,
+# bundled into an array together with the real exit code (seen live, 2026-10-30: "winget install ... failed
+# with code System.Object[]" on an install that had actually succeeded - $code was that array, not the int).
+function Invoke-SysExeForExitCode([string]$Exe, [string[]]$ExeArgs) {
+ $o = & $Exe @ExeArgs
+ $LASTEXITCODE
+}
+function Invoke-SysWinget([string[]]$WingetArgs) { Invoke-SysExeForExitCode 'winget.exe' $WingetArgs }
 
 # --- detection ---
 function Find-Clang {
@@ -103,6 +111,7 @@ function Resolve-Tools([switch]$DryRun) {
  foreach ($r in $missing) {
   Write-Plain ('{0} is needed. Download size {1}, from {2}.' -f $r.Name, $r.Size, $r.Source)
   if (-not (Ask-YesNo ('Install {0} now?' -f $r.Name))) { Write-Plain 'Nothing more was changed. The installer cannot go on without it.'; return $false }
+  if (-not $DryRun) { Write-Plain 'Installing - this can take a few minutes depending on your connection. Nothing more is printed here until it finishes.' }
   $wingetArgs = @('install', '--id', $r.WingetId, '--exact', '--source', 'winget', '--accept-package-agreements', '--accept-source-agreements') + $r.WingetArgs
   $id = Invoke-JournaledChange -Phase 'tools' -Action ('install ' + $r.WingetId) -Target $r.Name -Previous $null -Undo 'left installed (Roll back lists it; uninstall from Settings > Apps if you want it gone)' -DryRun:$DryRun -Do {
    $code = Invoke-SysWinget $wingetArgs

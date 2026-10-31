@@ -10,7 +10,7 @@ function Get-SysFwBootMgrText { $ErrorActionPreference = 'Continue'; $o = & bcde
 function Get-SysVolumeLabel([string]$Letter) { $v = Get-Volume -DriveLetter $Letter -ErrorAction SilentlyContinue; if ($v) { [string]$v.FileSystemLabel } else { $null } }
 function Invoke-SysQueueBoot([string]$EntryId) { $ErrorActionPreference = 'Continue'; $o = & bcdedit.exe /set '{fwbootmgr}' bootsequence $EntryId 2>&1; if ($LASTEXITCODE -ne 0) { throw "bcdedit could not queue the boot: $($o | Out-String)" } }
 function Invoke-SysClearQueue { $ErrorActionPreference = 'Continue'; $o = & bcdedit.exe /deletevalue '{fwbootmgr}' bootsequence 2>&1; $LASTEXITCODE -eq 0 }
-function Invoke-SysRestart([int]$Seconds, [string]$Reason) { & shutdown.exe /r /t $Seconds /c $Reason; $LASTEXITCODE }
+function Invoke-SysRestart([int]$Seconds, [string]$Reason) { $o = & shutdown.exe /r /t $Seconds /c $Reason; $LASTEXITCODE }
 
 # Firmware entries that boot \EFI\BOOT\BOOTX64.EFI from the volume labelled GPUUNLOCK. Looked up every time, never stored.
 function Find-UnlockEntries([string]$Label = $script:UnlockLabel) {

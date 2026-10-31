@@ -71,6 +71,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-10-30 - Fixed a fresh-clone install getting stuck at step 3 and step 8
+
+A tester reported installing LLVM at step 3 looked like it failed (a confusing `System.Object[]` error) even
+though it had actually worked, and that step 8 ("building the read-only diagnostic") then failed outright
+with a missing `generated.h` file. Both were real bugs that only show up on a clean install with nothing
+pre-built - fixed, and installing a tool now says up front that it can take a few minutes so a long,
+silent download doesn't look stuck.
+
 ### 2026-10-30 - The keep-or-remove question for build tools is now asked right when install finishes
 
 Previously that question only came up if you ran Roll back afterward - most people who finish a normal,
