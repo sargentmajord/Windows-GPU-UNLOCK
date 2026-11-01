@@ -98,6 +98,7 @@ static EFI_STATUS Run(int scenario) {
   Mode.Info=&ModeInfo;Mode.SizeOfInfo=sizeof(ModeInfo);Mode.MaxMode=1;
   Mode.FrameBufferBase=0xfc00000000;Mode.FrameBufferSize=3686400;Gop.Mode=&Mode;
   if(scenario==10)Gop.Mode=NULL;
+  if(scenario==11)Mode.Info=NULL;
   Pci.GetLocation=Location;Pci.Pci.Read=Read;
   Driver.ImageHandle=H[2];Driver.DriverBindingHandle=H[2];Driver.Stop=DriverStop;
   Image.DeviceHandle=H[0];Image.FilePath=&EndPath;Image.ImageSize=12345;
@@ -118,6 +119,8 @@ int main(void) {
   Check(Run(8)==EFI_DEVICE_ERROR,"short write fails");
   Check(Run(9)==EFI_DEVICE_ERROR,"flush failure fails");
   Check(Run(10)==EFI_NOT_READY,"null GOP mode is incomplete");
+  Check(Run(11)==EFI_SUCCESS,"a GOP with no Mode->Info (a non-console GPU, e.g. a second card) is not a capture failure");
+  Check(strstr(Output,"gop info-bytes=")!=NULL,"the missing-Info GOP is still recorded, as an observation");
   Check(GuCaptureGraph(NULL,NULL)==EFI_INVALID_PARAMETER,"null input rejected");
   printf("PASS diagnostic host checks: %d; no device/driver mutation services provided\n",Checks);
   return 0;

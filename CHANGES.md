@@ -1,5 +1,38 @@
 # Changes
 
+## 2026-11-01 - Correction: the real cause of the step-13 "capture did not finish cleanly" was elsewhere (GitHub issue #1)
+
+- The 2026-10-31 fix below (moving the diagnostic probe outside the handle-identity check) did
+  not fix the reporter's problem - he retested on both the new and the rolled-back build and
+  got the same result each time. That ruled out the handle-identity theory: it wasn't timing
+  or ordering-dependent after all, since the fix changed the ordering and nothing changed.
+- Real root cause, found this time by reading `Details()`'s GOP handling in
+  `internal-boot/boot/diagnostic.c` rather than guessing again: a GOP (Graphics Output
+  Protocol) handle that exists but isn't driving the active display - normal on any PC with
+  more than one GPU, which matches the reporter's machine (a discrete RTX 3070 Ti plus an
+  Intel UHD 630) - legitimately has `Mode` set but `Mode->Info` null. The diagnostic treated
+  that as fatal (`Problem(c,"gop-info",...)`) unless `GU_CONSOLE_AGGREGATE` was set, a
+  `machine-profile.h` value. But the diagnostic runs *before* any profile exists for the
+  user's PC - that's its entire job - so it was compiling against the reference machine's own
+  profile (`profiles/z790-3060/profile.h`, `GU_CONSOLE_AGGREGATE 0`) instead of anything about
+  the real PC running it. Confirmed by `tools/profile_gen.py`'s own discovery-profile writer
+  (`--discovery`), which hardcodes `GU_CONSOLE_AGGREGATE 0` for every installer run, on every
+  PC, unconditionally - because at that point nothing else is knowable yet. On the one
+  single-GPU reference machine this never mattered; on a multi-GPU machine it fails every
+  time, deterministically - which is exactly why the previous fix made no difference and why
+  both of the reporter's attempts produced identical-sized logs.
+- Fixed by removing the `GU_CONSOLE_AGGREGATE` dependency (and the now-unused
+  `machine-profile.h` include) from `diagnostic.c` entirely: a GOP without `Mode->Info` is now
+  always recorded as an observation, never a capture failure, matching what the
+  Turing-GPU-UNLOCK port's own `diagnostic.c` already does for the same reason.
+- This path had no host-test coverage at all - every existing test GOP mock had `Mode->Info`
+  populated. Added one (`test_diagnostic.c` scenario 11: `Mode` set, `Info` null) that fails
+  under the old code and passes under the fix.
+- Verified: `internal-boot/boot/test-diagnostic.ps1` (38/38, including the new scenario), a
+  clean rebuild of the real diagnostic EFI target (zero `-Werror` warnings, PE verification
+  passed, binary content changed per its hash), and the full installer test suite elevated
+  (1193/1193). Not yet confirmed on the reporter's own hardware - asked him to retest again.
+
 ## 2026-10-31 - Fixed a false "capture did not finish cleanly" on real hardware (GitHub issue #1)
 
 - Reporter (Techie007L, issue #1) got past the firmware-boot-entry issue, then hit step 13

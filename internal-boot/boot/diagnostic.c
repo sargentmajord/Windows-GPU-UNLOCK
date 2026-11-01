@@ -10,7 +10,6 @@
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/PciIo.h>
 #include <Guid/GlobalVariable.h>
-#include "../unlock/machine-profile.h"
 #ifdef GU_DIAGNOSTIC_PROBE
 #include "probe.h"
 #endif
@@ -141,13 +140,18 @@ static VOID Details(CAPTURE *c,EFI_HANDLE h,EFI_GUID *g) {
       Field(c," height=0x",gp->Mode->Info->VerticalResolution);
       Field(c," stride=0x",gp->Mode->Info->PixelsPerScanLine);End(c);
     } else {
-#if GU_CONSOLE_AGGREGATE
-      /* Aggregate/pathless GOPs legitimately lack Mode->Info on this firmware;
-         record it as an observation, not a capture failure. */
+      /* A second GOP that isn't driving the active display (a common shape
+       * on any PC with more than one GPU, including an integrated one next
+       * to a discrete card) legitimately lacks Mode->Info - this is not a
+       * capture failure. This file runs before any machine profile exists,
+       * so it must never gate this on GU_CONSOLE_AGGREGATE (a profile.h
+       * value): without -I <profile folder> that macro silently falls back
+       * to the reference machine's own profile instead of the real PC
+       * running this diagnostic, which is a different machine by design -
+       * see machine-profile.h. Record it as an observation, not a failure,
+       * unconditionally; the Turing port's diagnostic.c already does this
+       * for the same reason. */
       Field(c,"gop info-bytes=0x",gp->Mode->SizeOfInfo);End(c);
-#else
-      Problem(c,"gop-info",EFI_NOT_READY);
-#endif
     }
   }
   if(pci) {

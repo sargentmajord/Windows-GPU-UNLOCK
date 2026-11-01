@@ -65,13 +65,14 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
-### 2026-10-31 - Fixed a false "capture did not finish cleanly" on real hardware
+### 2026-11-01 - Fixed a false "capture did not finish cleanly" on a multi-GPU PC
 
-The installer's own read-only diagnostic probe (PCI reads, the PROM dump, the image dumps)
-was running inside a window meant to detect a GPU driver attaching or detaching mid-capture.
-On real hardware the probe's own file writes could themselves be mistaken for that, so a
-capture that actually succeeded could still be refused at the "making the profile" step.
-Fixed by moving the probe outside that window; the capture's real data was never at fault.
+On any PC with more than one GPU (for example a discrete card plus an integrated one), the
+diagnostic treated the non-active GPU's graphics handle as a capture failure instead of the
+normal, harmless thing it is. That could refuse a capture that had actually succeeded, at the
+"making the profile" step. An earlier fix in this slot targeted a different, real but
+insufficient cause; this one addresses what was actually making it fail. Fixed; the capture's
+real data was never at fault.
 
 ### 2026-10-30 - A full install, start to finish, completed with no errors
 
