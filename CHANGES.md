@@ -1,5 +1,42 @@
 # Changes
 
+## 2026-11-01 - Second correction: the GOP fix exposed a regression the first fix had introduced (GitHub issue #1)
+
+- Reporter retested after the GOP fix (below) and got the real capture result this time
+  (`capture-complete=1`, a genuinely successful capture) - but the installer then refused with
+  a *different* message: "target-count - The diagnostic found no matching card(s) instead of
+  exactly one." This had never been reachable before, since the capture-incomplete and GOP bugs
+  were both blocking everything ahead of it.
+- Root cause: this project's own 2026-10-31 fix (the first one, moving `GuProbeGpu` to run after
+  the handle-identity check instead of between its two snapshots) was itself buggy.
+  `tools/profile_gen.py`'s `parse_capture()` only scans for `probe targets=`/`probe-target seg=`
+  lines in the part of the log *before* the first `handle id=` line (the "head"/"body" split it
+  uses to scope some regexes). The original code ran the probe before the main
+  handle/protocol-enumeration loop, so its output always landed in "head". Moving it to run
+  *after* that loop (to fix the handle-identity false positive) moved its output into "body"
+  instead - where `parse_capture()` never looks for it - so `probe_targets` came back empty on
+  every single capture, regardless of how many cards actually matched. That reads as `c.probe_targets
+  or 'no'` -> "no matching card(s)" even on a perfectly good capture that found the card correctly.
+  This had zero test coverage: the PowerShell test suite's diagnostic tests never define
+  `GU_DIAGNOSTIC_PROBE`, and the Python `profile_gen` tests check parsing against static,
+  pre-recorded reference captures rather than diagnostic.c's current, live output - nothing in
+  the suite connects what the C code currently emits to what the parser currently expects.
+- Fixed by moving the probe to run before *either* handle snapshot (right after `Variables()`,
+  before the main enumeration loop even starts) instead of after the identity check. This keeps
+  the original 2026-10-31 fix's actual goal intact - the probe's file I/O still can't be mistaken
+  for tampering during the protocol walk, since none of it happens during that window at all now,
+  not even at the far end of it - and restores the probe's output to the "head" section
+  `parse_capture()` expects.
+- Added `tools/test_profile_gen.py::test_probe_output_must_precede_first_handle_line`, which pins
+  this ordering contract directly (asserts `probe targets=` precedes the first `handle id=` line
+  in the real reference capture, and that moving it after produces exactly this `target-count`
+  false refusal) - this is the test that should have existed before any of the probe-position
+  changes and would have caught this immediately.
+- Verified: `internal-boot/boot/test-diagnostic.ps1` (38/38), a clean rebuild of the real
+  diagnostic EFI target (zero `-Werror` warnings), the full installer test suite elevated
+  (1193/1193), and `python -m unittest tools.test_profile_gen` against the real reference
+  captures (22/22, including the new test). Not yet confirmed on the reporter's own hardware.
+
 ## 2026-11-01 - Correction: the real cause of the step-13 "capture did not finish cleanly" was elsewhere (GitHub issue #1)
 
 - The 2026-10-31 fix below (moving the diagnostic probe outside the handle-identity check) did

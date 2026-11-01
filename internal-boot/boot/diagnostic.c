@@ -176,6 +176,20 @@ EFI_STATUS GuCaptureGraph(EFI_SYSTEM_TABLE *t,EFI_FILE_PROTOCOL *file) {
   Field(&c,"console out=0x",(UINTN)t->ConsoleOutHandle);Field(&c," error=0x",(UINTN)t->StandardErrorHandle);
   Field(&c," input=0x",(UINTN)t->ConsoleInHandle);End(&c);
   Variables(&c);
+#ifdef GU_DIAGNOSTIC_PROBE
+  /* Read-only profile probe: config space, caps, BAR/PROM hash, image dumps.
+   * Must run here, before the first handle snapshot below, for two reasons:
+   * (1) its own file I/O (a new directory, dozens of file creates, ~2MB of
+   * writes) can itself add or reorder handles on real firmware, and running
+   * before either snapshot means that becomes part of the baseline instead
+   * of looking like tampering during the protocol walk; (2) tools/profile_gen.py's
+   * parse_capture() only scans for "probe targets="/"probe-target seg=" in the
+   * portion of the log before the first "handle id=" line - putting the probe
+   * after that line (as an earlier version of this fix did) silently broke that
+   * parsing, which read as "no matching card(s)" with a perfectly good capture
+   * underneath it. */
+  (void)GuProbeGpu(t,&c);
+#endif
   EFI_BOOT_SERVICES *bs=t->BootServices;EFI_HANDLE *handles=NULL;UINTN count=0;
   EFI_STATUS s=bs->LocateHandleBuffer(AllHandles,NULL,NULL,&count,&handles);
   Field(&c,"handles status=0x",s);Field(&c," count=0x",count);End(&c);
@@ -218,16 +232,6 @@ EFI_STATUS GuCaptureGraph(EFI_SYSTEM_TABLE *t,EFI_FILE_PROTOCOL *file) {
   }
   if(after)bs->FreePool(after);
   if(handles)bs->FreePool(handles);
-#ifdef GU_DIAGNOSTIC_PROBE
-  /* Read-only profile probe: config space, caps, BAR/PROM hash, image dumps.
-   * Runs after the handle-identity check above, not between its two
-   * snapshots: it does real file I/O (a new directory, dozens of file
-   * creates, ~2MB of writes), and on real firmware that can itself add or
-   * reorder handles (FAT driver housekeeping, disk I/O polling), which the
-   * identity check would otherwise blame on tampering during the protocol
-   * walk even though the probe's own data came through fine. */
-  (void)GuProbeGpu(t,&c);
-#endif
   Text(&c,c.Complete?"capture-complete=1\r\n":"capture-complete=0\r\n");
   s=Flush(&c);if(s!=EFI_SUCCESS)return s;
   s=file->Flush(file);if(s!=EFI_SUCCESS)return s;

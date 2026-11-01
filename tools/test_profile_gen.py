@@ -176,6 +176,21 @@ class Refusals(unittest.TestCase):
         f = refused(self, t, 'target-count')
         self.assertIn('Two identical cards', f.fix)
 
+    def test_probe_output_must_precede_first_handle_line(self):
+        # parse_capture() only scans for "probe targets="/"probe-target seg=" before the first
+        # "handle id=" line (the "head"/"body" split). A real regression moved the diagnostic's
+        # probe to run after the handle-protocol walk, which silently broke this and surfaced as
+        # "no matching card(s)" on a capture that was otherwise completely fine. This pins the
+        # contract from the parser's side, independent of where diagnostic.c actually puts it.
+        first_handle = self.text.index('\nhandle id=')
+        self.assertLess(self.text.index('\nprobe targets='), first_handle,
+                         '"probe targets=" must appear before the first "handle id=" line')
+        without_probe_line = self.text.replace('probe targets=0001\n', '', 1)
+        first_handle_line_end = without_probe_line.index('\n', without_probe_line.index('\nhandle id=') + 1) + 1
+        moved = without_probe_line[:first_handle_line_end] + 'probe targets=0001\n' + without_probe_line[first_handle_line_end:]
+        f = refused(self, moved, 'target-count')
+        self.assertIn('no', f.message)
+
     def test_not_cold(self):
         refused(self, self.mutate(r'^(mmio off=0x00118128 status=0x0+ value=)0x00008b8f$', r'\g<1>0x00001234'), 'not-cold')
         refused(self, self.mutate(r'^(mmio off=0x00823804 status=0x0+ value=)0xffffff8f$', r'\g<1>0xffffffff'), 'not-cold')

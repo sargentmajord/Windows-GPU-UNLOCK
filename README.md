@@ -65,6 +65,16 @@ screen working, Windows 11, UEFI, Secure Boot off. Details: [docs/PROFILE-Z790-3
 Every dated entry below, start to finish, trimmed of internal engineering detail (exact hashes, raw test-count
 tallies, file-rename bookkeeping) that only matters to someone editing the code. Full untrimmed history: [CHANGES.md](CHANGES.md).
 
+### 2026-11-01 - Fixed a false "no matching card(s)" that the previous fix above had introduced
+
+Moving the diagnostic's probe to fix the multi-GPU issue below had a side effect: it moved the
+probe's own output past a point the profile-building step reads from, so it stopped seeing which
+card the probe had actually found - even on a capture that had otherwise succeeded completely.
+Fixed by running the probe earlier instead, before either of the diagnostic's two handle
+snapshots; this keeps the previous fix's own goal while putting the probe's output back where it
+needs to be. Added a test that pins this down directly so a future change to the probe's timing
+can't silently break it the same way again.
+
 ### 2026-11-01 - Fixed a false "capture did not finish cleanly" on a multi-GPU PC
 
 On any PC with more than one GPU (for example a discrete card plus an integrated one), the
