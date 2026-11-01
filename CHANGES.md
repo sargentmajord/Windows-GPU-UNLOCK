@@ -1,5 +1,36 @@
 # Changes
 
+## 2026-10-31 - Fixed a false "capture did not finish cleanly" on real hardware (GitHub issue #1)
+
+- Reporter (Techie007L, issue #1) got past the firmware-boot-entry issue, then hit step 13
+  ("The installer cannot make a safe profile for this PC... The capture did not finish
+  cleanly.") on both attempts, with identical 329 KB diagnostic logs each time. But the
+  capture's own output was actually complete: a full 1 MB `PROM.BIN` and 50 `IMGxx.BIN` image
+  dumps were present and correctly sized - the installer was refusing data that was fine.
+- Root cause: `GuCaptureGraph` (`internal-boot/boot/diagnostic.c`) takes a handle-count
+  snapshot before and after the protocol-enumeration walk, specifically to catch something
+  (like a GPU driver) attaching or detaching during that walk - any difference marks the
+  whole capture incomplete. The read-only diagnostic probe added for the installer
+  (`-DGU_DIAGNOSTIC_PROBE`, `probe.c`: PCI config/cap reads, the BAR0/PROM hash, and the
+  image dumps) was being run *between* those two snapshots, not around them. The probe does
+  real file I/O - creating a directory, opening and writing 50+ files, ~2 MB total - and on
+  real firmware that work can itself add or reorder handles (FAT driver housekeeping, disk
+  I/O polling), which the identity check then (wrongly) read as tampering during the
+  protocol walk, even though the probe's own data had come through correctly. This path has
+  no host-test coverage (the host test harness never defines `GU_DIAGNOSTIC_PROBE`), so it
+  went untested until it hit real hardware.
+- Fixed by moving the probe to run after the handle-identity check completes, instead of
+  between its two snapshots - the check still brackets only the protocol-enumeration walk it
+  was actually meant to protect, and the probe's own (already read-only, already safe) file
+  I/O no longer falls inside that window. `Problem()` calls from a genuine probe failure
+  still mark the capture incomplete exactly as before; only the false positive from the
+  probe's expected side effects is removed.
+- Verified: `internal-boot/boot/test-diagnostic.ps1` (35/35, including the mocked
+  handle-identity-changed scenario, which is unaffected by the reorder), and a clean rebuild
+  of the real diagnostic EFI target (`build-diagnostic.ps1`, zero `-Werror` warnings, PE
+  verification passed). Not yet confirmed on the reporter's own hardware - asked them to
+  retest.
+
 ## 2026-10-30 - A full install, start to finish, completed with no errors
 
 - After every fix below, the reporter's own fresh-clone bugs (GitHub issue #1) plus the benchmark build

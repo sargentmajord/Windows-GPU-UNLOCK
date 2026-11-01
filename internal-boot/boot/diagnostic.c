@@ -174,10 +174,6 @@ EFI_STATUS GuCaptureGraph(EFI_SYSTEM_TABLE *t,EFI_FILE_PROTOCOL *file) {
   Variables(&c);
   EFI_BOOT_SERVICES *bs=t->BootServices;EFI_HANDLE *handles=NULL;UINTN count=0;
   EFI_STATUS s=bs->LocateHandleBuffer(AllHandles,NULL,NULL,&count,&handles);
-#ifdef GU_DIAGNOSTIC_PROBE
-    /* Read-only profile probe: config space, caps, BAR/PROM hash, image dumps. */
-    (void)GuProbeGpu(t,&c);
-#endif
   Field(&c,"handles status=0x",s);Field(&c," count=0x",count);End(&c);
   if(s!=EFI_SUCCESS || !handles || !count || count>MAX_HANDLES)Problem(&c,"handle-snapshot",s==EFI_SUCCESS?EFI_BAD_BUFFER_SIZE:s);
   else for(UINTN i=0;i<count && c.Io==EFI_SUCCESS;i++) {
@@ -218,6 +214,16 @@ EFI_STATUS GuCaptureGraph(EFI_SYSTEM_TABLE *t,EFI_FILE_PROTOCOL *file) {
   }
   if(after)bs->FreePool(after);
   if(handles)bs->FreePool(handles);
+#ifdef GU_DIAGNOSTIC_PROBE
+  /* Read-only profile probe: config space, caps, BAR/PROM hash, image dumps.
+   * Runs after the handle-identity check above, not between its two
+   * snapshots: it does real file I/O (a new directory, dozens of file
+   * creates, ~2MB of writes), and on real firmware that can itself add or
+   * reorder handles (FAT driver housekeeping, disk I/O polling), which the
+   * identity check would otherwise blame on tampering during the protocol
+   * walk even though the probe's own data came through fine. */
+  (void)GuProbeGpu(t,&c);
+#endif
   Text(&c,c.Complete?"capture-complete=1\r\n":"capture-complete=0\r\n");
   s=Flush(&c);if(s!=EFI_SUCCESS)return s;
   s=file->Flush(file);if(s!=EFI_SUCCESS)return s;
